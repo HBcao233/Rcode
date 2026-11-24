@@ -1,0 +1,39 @@
+[package]
+name = "rcode-ffi"
+description = "UniFFI export layer for Rcode core. The only crate exposed to Kotlin."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "staticlib", "lib"]
+name = "rcode_ffi"
+
+[dependencies]
+uniffi = "0.32.2"
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# Android logcat sink; only meaningful on target_os = "android".
+[target.'cfg(target_os = "android")'.dependencies]
+tracing-android = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "ping"
+harness = false
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+required-features = ["bindgen"]
+
+[features]
+# Enabled only by scripts/build-core.sh to build the bindgen CLI.
+bindgen = ["uniffi/cli"]
+
+[lints]
+workspace = true

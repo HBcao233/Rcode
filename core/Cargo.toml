@@ -1,0 +1,23 @@
+[workspace]
+resolver = "2"
+members = ["crates/rcode-ffi"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/hbcao/rcode"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+
+[workspace.dependencies]
+tracing = "0.1"
+tracing-android = "0.2"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry"] }
+criterion = { version = "0.7", default-features = false }
