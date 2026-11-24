@@ -1,0 +1,178 @@
+package com.hbcao.rcode.editor
+
+/**
+ * In-memory [EditorSessionApi] used by JVM unit tests.
+ *
+ * It mirrors the Rust session's byte-offset contract closely enough to exercise the
+ * IME state machine: the caret is stored as a UTF-16 index internally, while every
+ * public offset is a UTF-8 byte offset. The real Rust session is covered by
+ * instrumented tests.
+ */
+class FakeEditorSession(
+    initialText: String = "",
+) : EditorSessionApi {
+    private var document: String = initialText
+    private var caret: Int = initialText.length
+    private var documentVersion: Long = 1
+
+    override fun text(): String = document
+
+    override fun version(): Long = documentVersion
+
+    override fun lineCount(): Int = lineStarts().size
+
+    override fun cursor(): EditorCursorState {
+        val lineStart = lineStartIndex(caret)
+        return EditorCursorState(
+            byteOffset = Utf8Offsets.utf8Length(document.substring(0, caret)),
+            line = lineOf(caret),
+            columnBytes = Utf8Offsets.utf8Length(document.substring(lineStart, caret)),
+        )
+    }
+
+    override fun cursorUtf16Offset(): Int = caret
+
+    override fun insertText(text: String): Long {
+        document = document.substring(0, caret) + text + document.substring(caret)
+        caret += text.length
+        documentVersion += 1
+        return documentVersion
+    }
+
+    override fun replaceRange(
+        startByte: Int,
+        endByte: Int,
+        text: String,
+    ): Long {
+        val startIndex = Utf8Offsets.byteToUtf16Index(document, startByte)
+        val endIndex = Utf8Offsets.byteToUtf16Index(document, endByte)
+        document = document.substring(0, startIndex) + text + document.substring(endIndex)
+        caret = startIndex + text.length
+        documentVersion += 1
+        return documentVersion
+    }
+
+    override fun deleteRange(
+        startByte: Int,
+        endByte: Int,
+    ): Long = replaceRange(startByte, endByte, "")
+
+    override fun deleteBackward(): Long {
+        if (caret == 0) return documentVersion
+        val previous = document.offsetByCodePoints(caret, -1)
+        document = document.substring(0, previous) + document.substring(caret)
+        caret = previous
+        documentVersion += 1
+        return documentVersion
+    }
+
+    override fun deleteForward(): Long {
+        if (caret >= document.length) return documentVersion
+        val next = document.offsetByCodePoints(caret, 1)
+        document = document.substring(0, caret) + document.substring(next)
+        documentVersion += 1
+        return documentVersion
+    }
+
+    override fun moveCursor(byteOffset: Int): Int {
+        caret = Utf8Offsets.byteToUtf16Index(document, byteOffset.coerceAtLeast(0))
+        return cursor().byteOffset
+    }
+
+    override fun moveCursorHorizontal(deltaChars: Int): Int {
+        var index = caret
+        repeat(kotlin.math.abs(deltaChars)) {
+            if (deltaChars > 0) {
+                if (index < document.length) index = document.offsetByCodePoints(index, 1)
+            } else if (index > 0) {
+                index = document.offsetByCodePoints(index, -1)
+            }
+        }
+        caret = index
+        return cursor().byteOffset
+    }
+
+    override fun moveCursorVertical(deltaLines: Int): Int {
+        val starts = lineStarts()
+        val line = lineOf(caret)
+        val column = caret - starts[line]
+        val target = (line + deltaLines).coerceIn(0, starts.lastIndex)
+        val lineEnd = if (target + 1 < starts.size) starts[target + 1] - 1 else document.length
+        caret = starts[target] + column.coerceAtMost(lineEnd - starts[target])
+        return cursor().byteOffset
+    }
+
+    override fun viewport(
+        firstLine: Int,
+        maxLines: Int,
+    ): EditorViewportSnapshot {
+        val starts = lineStarts()
+        val first = firstLine.coerceIn(0, starts.lastIndex)
+        val count = maxLines.coerceAtLeast(1).coerceAtMost(starts.size - first)
+        val lines =
+            (first until first + count).map { index ->
+                val start = starts[index]
+                val end = if (index + 1 < starts.size) starts[index + 1] - 1 else document.length
+                EditorLineSlice(
+                    index = index,
+                    startByte = Utf8Offsets.utf8Length(document.substring(0, start)),
+                    text = document.substring(start, end),
+                )
+            }
+        return EditorViewportSnapshot(
+            version = documentVersion,
+            lineCount = starts.size,
+            firstLine = first,
+            lines = lines,
+            cursor = cursor(),
+        )
+    }
+
+    override fun contextBeforeCursor(maxUtf16Units: Int): String = utf16Suffix(document.substring(0, caret), maxUtf16Units)
+
+    override fun contextAfterCursor(maxUtf16Units: Int): String = utf16Prefix(document.substring(caret), maxUtf16Units)
+
+    private fun lineStarts(): List<Int> {
+        val starts = mutableListOf(0)
+        document.forEachIndexed { index, character ->
+            if (character == '\n') starts.add(index + 1)
+        }
+        return starts
+    }
+
+    private fun lineOf(index: Int): Int = document.substring(0, index).count { it == '\n' }
+
+    private fun lineStartIndex(index: Int): Int = document.lastIndexOf('\n', index - 1) + 1
+
+    private fun utf16Suffix(
+        text: String,
+        maxUnits: Int,
+    ): String {
+        var units = 0
+        var index = text.length
+        while (index > 0) {
+            val codePoint = text.codePointBefore(index)
+            val width = Character.charCount(codePoint)
+            if (units + width > maxUnits) break
+            units += width
+            index -= width
+        }
+        return text.substring(index)
+    }
+
+    private fun utf16Prefix(
+        text: String,
+        maxUnits: Int,
+    ): String {
+        var units = 0
+        var index = 0
+        while (index < text.length) {
+            val codePoint = text.codePointAt(index)
+            val width = Character.charCount(codePoint)
+            if (units + width > maxUnits) break
+            units += width
+            index += width
+        }
+        return text.substring(0, index)
+    }
+}
