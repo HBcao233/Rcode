@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Rcode</string>
+    <string name="editor_title_untitled">untitled.txt</string>
+    <string name="editor_core_error">core error: %1$s</string>
 </resources>

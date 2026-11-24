@@ -1,6 +1,7 @@
 package com.hbcao.rcode.state
 
 import com.hbcao.rcode.bridge.CoreBridge
+import com.hbcao.rcode.editor.FakeEditorSession
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -33,16 +34,39 @@ class MainViewModelTest {
     @Test
     fun `refresh publishes core version as Ready`() =
         runTest {
-            val vm = MainViewModel(FakeBridge { "rcode-core 0.1.0" }, StandardTestDispatcher(testScheduler))
-            vm.refresh()
-            assertEquals(MainUiState.Ready("rcode-core 0.1.0"), vm.state.value)
+            val viewModel =
+                MainViewModel(
+                    FakeBridge { "rcode-core 0.1.0" },
+                    FakeEditorSession(),
+                    StandardTestDispatcher(testScheduler),
+                )
+            viewModel.refresh()
+            assertEquals(MainUiState.Ready("rcode-core 0.1.0"), viewModel.state.value)
         }
 
     @Test
     fun `bridge failure publishes Error`() =
         runTest {
-            val vm = MainViewModel(FakeBridge { throw IllegalStateException("boom") }, StandardTestDispatcher(testScheduler))
-            vm.refresh()
-            assertEquals(MainUiState.Error("boom"), vm.state.value)
+            val viewModel =
+                MainViewModel(
+                    FakeBridge { throw IllegalStateException("boom") },
+                    FakeEditorSession(),
+                    StandardTestDispatcher(testScheduler),
+                )
+            viewModel.refresh()
+            assertEquals(MainUiState.Error("boom"), viewModel.state.value)
         }
+
+    @Test
+    fun `editor session is exposed for the screen`() {
+        val session = FakeEditorSession("hello")
+        val viewModel =
+            MainViewModel(
+                FakeBridge { "rcode-core 0.1.0" },
+                session,
+                StandardTestDispatcher(),
+            )
+
+        assertEquals("hello", viewModel.editorSession.text())
+    }
 }

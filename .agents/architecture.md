@@ -29,7 +29,7 @@
 | 界面布局、主题、动画 | Kotlin | Compose 原生支持 |
 | 文本编辑状态（内容、光标、选区） | Rust（权威状态） | 便于测试和跨平台复用 |
 | 光标/选区的视觉呈现 | Kotlin | 依赖屏幕坐标和手势 |
-| IME 输入 | Kotlin 接收，转换为 Rust 编辑命令 | IME 只能在 Android 侧实现 |
+| IME 输入 | Kotlin 接收（`InputConnection`，见 ADR-0002），转换为 Rust 编辑命令 | IME 只能在 Android 侧实现 |
 | 语法高亮计算 | Rust | 计算密集 |
 | 高亮结果绘制 | Kotlin | Canvas 绘制 |
 | 文件读写 | Kotlin（SAF）读取 URI，Rust 处理内容 | SAF 只能由 Android 访问 |
@@ -51,6 +51,7 @@ Kotlin 不得缓存完整文本副本作为权威数据。
 - 只绘制可见行（LazyColumn 不适合作为文本编辑器的底层，使用自定义 Canvas/View 绘制）。
 - 行布局缓存按版本号失效。
 - 高亮采用“视口 + 预取一屏”策略。
+- M1.0 临时实现：`rcode-ffi::EditorSession` 用 `String` 保存文本与光标；一次 `viewport(first_line, max_lines)` 返回可见行、行首字节偏移和光标。T-0007/T-0011 会用 rope 与完整会话替换，但 Kotlin 侧“只缓存当前版本可见行”的约定不变。
 
 ### 3.4 线程模型
 - UI 线程：仅做绘制和输入分发。

@@ -2,7 +2,7 @@
 
 A native Android code editor. Kotlin + Jetpack Compose for the UI, Rust for the core logic, connected via [UniFFI](https://mozilla.github.io/uniffi-rs/).
 
-> Status: **M0 (foundation)**. The app shows the Rust core version. No editing yet.
+> Status: **M1.0 (minimal editor)**. The app opens `untitled.txt` with an IME-capable canvas editor. File open/save lands later in M1.
 
 ## Layout
 

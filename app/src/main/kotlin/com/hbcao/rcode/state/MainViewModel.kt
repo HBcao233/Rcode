@@ -3,6 +3,7 @@ package com.hbcao.rcode.state
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hbcao.rcode.bridge.CoreBridge
+import com.hbcao.rcode.editor.EditorSessionApi
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,6 +14,8 @@ import kotlinx.coroutines.withContext
 
 class MainViewModel(
     private val bridge: CoreBridge,
+    /** Authoritative editing session; survives configuration changes with this ViewModel. */
+    val editorSession: EditorSessionApi,
     private val workDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
     private val _state = MutableStateFlow<MainUiState>(MainUiState.Loading)
@@ -31,5 +34,9 @@ class MainViewModel(
             } catch (e: Exception) {
                 MainUiState.Error(e.message ?: e::class.java.simpleName)
             }
+    }
+
+    override fun onCleared() {
+        editorSession.close()
     }
 }

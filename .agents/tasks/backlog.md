@@ -29,7 +29,7 @@
 
 这些任务字段完整，但部分依赖待确认项，实际领取前请先确认对应 Q 项。
 
-- [ ] **T-0027 M1.0 启动即编辑 untitled.txt（输入法可用）**
+- [ ] **T-0027 M1.0 启动即编辑 untitled.txt（输入法可用）** — **In Progress**（负责人：agent，分支 `feat/m1-0-untitled-editor`，任务单 `T-0027-m1-0-untitled-editor.md`）
   - 类型：feat ｜ 模块：ffi / editor / ui ｜ 依赖：T-0004，Q16、Q17、Q18
   - 背景：M0 完成后界面只有版本号，没有编辑界面和输入法。这是 M1 的第一步，为后续所有编辑功能提供可见的纵切。
   - 范围（包含）：

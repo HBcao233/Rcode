@@ -1,38 +1,76 @@
 package com.hbcao.rcode.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
+import com.hbcao.rcode.R
+import com.hbcao.rcode.editor.EditorView
 import com.hbcao.rcode.state.MainUiState
 import com.hbcao.rcode.state.MainViewModel
+import com.hbcao.rcode.ui.theme.EditorColors
 
+/**
+ * Main (and currently only) screen: the M1.0 editor for `untitled.txt`.
+ *
+ * The document session lives in [MainViewModel] so it survives rotation; the custom
+ * [EditorView] only owns rendering state and is re-created from the Rust session.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(viewModel: MainViewModel = viewModel()) {
+fun MainScreen(viewModel: MainViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(text = "Rcode", style = MaterialTheme.typography.headlineMedium)
-        Text(
-            text =
-                when (val s = state) {
-                    MainUiState.Loading -> "Loading core…"
-                    is MainUiState.Ready -> s.coreVersion
-                    is MainUiState.Error -> "Core error: ${s.message}"
+    val coreStatus = coreStatusText(state)
+    val editorColors = editorColors()
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.editor_title_untitled)) },
+                actions = {
+                    Text(
+                        text = coreStatus,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(end = 16.dp),
+                    )
                 },
-            style = MaterialTheme.typography.bodyLarge,
+            )
+        },
+    ) { innerPadding ->
+        AndroidView(
+            factory = { context -> EditorView(context, viewModel.editorSession, editorColors) },
+            modifier = Modifier.fillMaxSize().padding(innerPadding),
         )
     }
+}
+
+@Composable
+private fun coreStatusText(state: MainUiState): String =
+    when (state) {
+        MainUiState.Loading -> ""
+        is MainUiState.Ready -> state.coreVersion
+        is MainUiState.Error -> stringResource(R.string.editor_core_error, state.message)
+    }
+
+@Composable
+private fun editorColors(): EditorColors {
+    val scheme = MaterialTheme.colorScheme
+    return EditorColors(
+        background = scheme.background.toArgb(),
+        text = scheme.onBackground.toArgb(),
+        caret = scheme.primary.toArgb(),
+        composingUnderline = scheme.primary.toArgb(),
+    )
 }
