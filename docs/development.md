@@ -25,6 +25,7 @@ Generated files are not committed (see `.gitignore`).
 
 - **AGP 8.13 and Compose BOM**: newer BOMs (2026.08+) require AGP 9.1. The BOM is pinned to `2025.12.00` in `gradle/libs.versions.toml`.
 - **JNA**: pinned to 5.13.0. Newer releases fail D8 dexing for `minSdk 24` (MethodHandle API).
+- **UniFFI object cleaner**: `core/crates/rcode-ffi/uniffi.toml` sets `disable_java_cleaner = true`. The default generated code references `java.lang.ref.Cleaner` (API 33+) behind a runtime check, which fails lint for minSdk 24; JNA's cleaner is used instead.
 - **Termux (aarch64 host)**: the SDK's `aapt2` is x86_64. Point Gradle at the native `aapt2` in `~/.gradle/gradle.properties`:
   ```
   android.aapt2FromMavenOverride=/data/data/com.termux/files/usr/bin/aapt2
