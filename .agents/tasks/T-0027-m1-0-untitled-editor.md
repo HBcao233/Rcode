@@ -76,7 +76,7 @@ M0 完成后界面只有版本号，没有编辑界面和输入法。M1.0 是 M1
 ## 交接记录
 
 - 日期：2026-11-24
-- 分支与提交：`feat/m1-0-untitled-editor`（未提交，等待设备验证后统一提交）
+- 分支与提交：`feat/m1-0-untitled-editor`，最后提交 `3c57cd4`（实现分 3 个提交：ffi / editor / ui）
 - 已完成：
   - Rust `EditorSession` 与 14 个单元测试
   - UniFFI 绑定重新生成（`EditorSession`、`EditorViewport` 等）
