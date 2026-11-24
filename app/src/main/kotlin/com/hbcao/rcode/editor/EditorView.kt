@@ -128,8 +128,6 @@ class EditorView(
     internal fun textAfterCursor(maxUtf16Units: Int): CharSequence =
         session.contextAfterCursor(maxUtf16Units.coerceIn(0, MAX_CONTEXT_UNITS))
 
-    internal fun selectionOffset(): Int = session.cursorUtf16Offset()
-
     internal fun handleImeKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) {
             return performEditorKey(event.keyCode)
@@ -207,13 +205,14 @@ class EditorView(
     ): Boolean = isEditorKey(keyCode) || super.onKeyUp(keyCode, event)
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (event.actionMasked == MotionEvent.ACTION_UP) {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            if (!isFocused) {
+                requestFocus()
+            }
+            showKeyboard()
+        } else if (event.actionMasked == MotionEvent.ACTION_UP) {
             performClick()
         }
-        if (!isFocused) {
-            requestFocus()
-        }
-        showKeyboard()
         return true
     }
 
@@ -300,7 +299,7 @@ class EditorView(
             }
         renderedLines = lines
         caretRect = caretRect(viewport, lines, left)
-        composingUnderlines = composingUnderlines(viewport, lines, left)
+        composingUnderlines = composingUnderlines(lines, left)
         invalidate()
     }
 
@@ -321,7 +320,6 @@ class EditorView(
     }
 
     private fun composingUnderlines(
-        viewport: EditorViewportSnapshot,
         lines: List<RenderedLine>,
         left: Float,
     ): List<ComposingUnderline> {
