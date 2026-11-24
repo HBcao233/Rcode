@@ -51,7 +51,7 @@ Backlog ──► Ready ──► In Progress ──► Review ──► Done
 
 ### 需要人类审批的
 - 新增依赖（需通过 `conventions.md` 第 6 节检查，并在 PR 中标注）
-- 修改 `.agent/` 中的目标、非目标、里程碑范围
+- 修改 `.agents/` 中的目标、非目标、里程碑范围
 - 创建或修改 ADR 的 Accepted 状态
 - 修改签名配置、包名、应用权限（`AndroidManifest.xml` 中的 `uses-permission`）
 - 合并到 `main`、发布、推送到应用商店

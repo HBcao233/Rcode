@@ -26,7 +26,7 @@ description: Define and modify the UniFFI interface between Rust (core/crates/rc
    ```
 3. 在 `app/src/test` 中为封装层写单元测试（如果封装层有逻辑）。
 4. 运行端到端检查：`./gradlew :app:connectedDebugAndroidTest`（如有模拟器）或至少 `assembleDebug`。
-5. 在 `.agent/architecture.md` 的接口清单中同步更新（如果新增了公开能力）。
+5. 在 `.agents/architecture.md` 的接口清单中同步更新（如果新增了公开能力）。
 
 ## 检查清单
 - [ ] 没有暴露内部 crate 类型

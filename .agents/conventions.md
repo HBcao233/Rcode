@@ -5,18 +5,18 @@
 ## 1. 通用
 
 - 语言：代码标识符、提交信息、代码注释使用英文；面向用户的字符串使用资源文件（`strings.xml`），初期支持英文和简体中文。
-- 文档：`.agent/` 中的文档使用中文；`docs/` 面向开源读者时使用英文。
+- 文档：`.agents/` 中的文档使用中文；`docs/` 面向开源读者时使用英文。
 - 单个 PR/任务只做一件事。超过约 400 行有效改动应拆分。
 - 禁止提交密钥、签名文件、`local.properties`、`*.jks`。
 
 ## 2. Kotlin / Android
 
 - 代码风格：官方 Kotlin 风格，由 `ktlint`（或 `detekt`）检查。
-- UI：仅使用 Jetpack Compose，禁止新增 XML 布局（除非 Android 平台要求）。
+- UI：仅使用 Jetpack Compose，禁止新增 XML 布局（除非 Android 平台要求）。编辑器视图除外，见 ADR-0002。
 - 状态：`ViewModel` + `StateFlow`；Composable 参数使用不可变类型。
 - 协程：使用结构化并发，禁止 `GlobalScope`。
 - 依赖注入：初期手动构造；超过 10 个组件后再评估 Hilt/Koin（需 ADR）。
-- 包名：`com.example.rcode`（正式发布前替换为正式包名，记录在 ADR）。
+- 包名：`com.hbcao.rcode`。
 - 禁止在 Composable 内直接调用 Rust 的重计算函数，必须通过 ViewModel 或 `Dispatchers.Default`。
 - 资源命名：`snake_case`；Composable 函数使用 `PascalCase`。
 
@@ -38,7 +38,7 @@
 | Rust 单元测试 | `cargo test` | 缓冲区、搜索、高亮的核心逻辑覆盖率目标 80% 以上 |
 | Rust 属性测试 | `proptest` | 缓冲区编辑序列的不变量 |
 | Rust 快照测试 | `insta` | 高亮输出 |
-| Kotlin 单元测试 | JUnit5 + Turbine | ViewModel、状态映射 |
+| Kotlin 单元测试 | JUnit4.13.2 | ViewModel、状态映射 |
 | Android 仪器测试 | Compose UI Test | 关键用户流程（打开、编辑、保存） |
 | 基准 | Criterion（Rust）、Macrobenchmark（Android） | 见成功指标 |
 

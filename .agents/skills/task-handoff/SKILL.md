@@ -6,8 +6,8 @@ description: Pick up, pause, or hand off an Rcode development task between agent
 # 任务领取与交接
 
 ## 领取任务
-1. 打开 `.agent/tasks/backlog.md`，确认任务在 “Ready” 区。
-2. 在 `.agent/tasks/` 下复制 `TEMPLATE.md` 为 `T-XXXX-<slug>.md`，填写基本信息。
+1. 打开 `.agents/tasks/backlog.md`，确认任务在 “Ready” 区。
+2. 在 `.agents/tasks/` 下复制 `TEMPLATE.md` 为 `T-XXXX-<slug>.md`，填写基本信息。
 3. 创建分支：`git switch -c feat/<slug>` 或 `fix/<slug>`。
 4. 将 backlog 中该条目标记为 In Progress，写入负责人与分支。
 5. 按 `workflow.md` 第 3 节执行。

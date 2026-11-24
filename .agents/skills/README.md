@@ -16,11 +16,11 @@ Skill 是给 agent 的专项工作指南。Agent 应根据任务类型加载对�
 ## 如何在 pi 中使用
 
 pi 会发现 `.agents/skills/` 下含 `SKILL.md` 的目录（项目级，从工作目录向上查找到仓库根）。
-本项目的 skill 放在 `.agent/skills/`，在仓库根创建符号链接即可被发现：
+本项目的 skill 放在 `.agents/skills/`，在仓库根创建符号链接即可被发现：
 ```bash
 cd ~/Rcode
 mkdir -p .agents
-ln -s ../.agent/skills .agents/skills
+ln -s ../.agents/skills .agents/skills
 ```
 之后在会话中使用 `/reload` 生效。需要强制加载时使用 `/skill:<name>`。
 注意：项目级 skill 可以执行脚本，首次信任项目前应审阅其内容。

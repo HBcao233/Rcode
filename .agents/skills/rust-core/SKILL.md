@@ -9,7 +9,7 @@ description: Implement and test Rust core logic for Rcode (buffer, syntax, searc
 修改 `core/` 下任何 crate，或为其编写测试、基准。
 
 ## 步骤
-1. 阅读 `.agent/architecture.md` 第 2、3、4 节，确认功能归属 Rust。
+1. 阅读 `.agents/architecture.md` 第 2、3、4 节，确认功能归属 Rust。
 2. 确认修改的 crate 是否允许依赖（只有 `rcode-ffi` 可以接触 UniFFI）。
 3. 先写测试：
    - 纯逻辑：单元测试

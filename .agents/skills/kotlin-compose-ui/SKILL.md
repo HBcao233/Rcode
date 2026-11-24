@@ -15,7 +15,7 @@ description: Build Android UI in Kotlin with Jetpack Compose for Rcode, includin
 - Rust 调用通过 `bridge/` 的封装，并在 `Dispatchers.Default` 或 `IO` 上执行。
 
 ## 步骤
-1. 阅读 `.agent/architecture.md` 第 3.3、3.4 节。
+1. 阅读 `.agents/architecture.md` 第 3.3、3.4 节。
 2. 为新界面定义 `UiState` 数据类（不可变）和 `UiEvent` 密封类。
 3. 先写 ViewModel 单元测试（用假的 bridge 实现），再写 Composable。
 4. Composable 使用 `@Preview`，且预览不依赖真实 Rust 库。

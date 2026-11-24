@@ -12,7 +12,7 @@
 └───────────────────────────────┬──────────────────────────────────────────────┘
                                 │ UniFFI（JNI，批量调用）
 ┌───────────────────────────────┴──────────────────────────────────────────────┐
-│                       Rust 核心库 libcore.so                                 │
+│                       Rust 核心库 librcode_ffi.so                                 │
 │  buffer/      rope 文本缓冲区、编辑操作、撤销/重做                          │
 │  syntax/      tree-sitter 增量解析、高亮 span 生成                          │
 │  search/      文件遍历、.gitignore、全文搜索（流式结果）                    │
@@ -71,7 +71,7 @@ Kotlin 不得缓存完整文本副本作为权威数据。
 
 ```
 Rcode/
-├── .agent/                  # 本工作区
+├── .agents/                  # 本工作区
 ├── app/                     # Android 应用模块（Kotlin + Compose）
 │   └── src/main/kotlin/…/
 │       ├── ui/

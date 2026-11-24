@@ -38,7 +38,7 @@ bash ./scripts/build-core.sh
 - [`docs/development.md`](docs/development.md): environment setup and troubleshooting
 - [`CONTRIBUTING.md`](CONTRIBUTING.md): workflow and definition of done
 - [`CHANGELOG.md`](CHANGELOG.md)
-- [`.agent/`](.agent/README.md): goals, roadmap, architecture, ADRs
+- [`.agents/`](.agents/README.md): goals, roadmap, architecture, ADRs
 
 ## License
 
