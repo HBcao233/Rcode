@@ -501,6 +501,7 @@ name = "rcode-ffi"
 version = "0.1.0"
 dependencies = [
  "criterion",
+ "thiserror",
  "tracing",
  "tracing-android",
  "tracing-subscriber",

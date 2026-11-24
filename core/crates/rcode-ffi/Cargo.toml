@@ -12,6 +12,7 @@ name = "rcode_ffi"
 
 [dependencies]
 uniffi = "0.32.2"
+thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 

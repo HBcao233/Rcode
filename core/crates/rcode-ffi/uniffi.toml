@@ -1,0 +1,7 @@
+# UniFFI Kotlin binding configuration for the Rcode core.
+#
+# `disable_java_cleaner` forces the JNA-based object cleaner. The default generated
+# code references java.lang.ref.Cleaner (API 33+) behind a runtime `Class.forName`
+# check; the JNA path is required for our minimum API 24 and keeps lint quiet.
+[bindings.kotlin]
+disable_java_cleaner = true

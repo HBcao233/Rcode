@@ -1,7 +1,11 @@
 //! UniFFI export layer for Rcode.
 //!
 //! This is the only crate that Kotlin may call. Exported functions must never
-//! panic across the FFI boundary (see `.agent/conventions.md` §3).
+//! panic across the FFI boundary (see `.agents/conventions.md` §3).
+
+mod editor;
+
+pub use editor::{EditorCursor, EditorError, EditorLine, EditorSession, EditorViewport};
 
 use std::sync::Once;
 

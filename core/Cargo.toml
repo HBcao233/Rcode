@@ -20,4 +20,5 @@ panic = "deny"
 tracing = "0.1"
 tracing-android = "0.2"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["registry"] }
+thiserror = "2"
 criterion = { version = "0.7", default-features = false }
