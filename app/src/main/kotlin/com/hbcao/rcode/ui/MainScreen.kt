@@ -15,6 +15,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -66,7 +67,7 @@ fun MainScreen(viewModel: MainViewModel) {
                     Text(
                         text = coreStatus,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,  // rgb(73, 69, 79)
                         modifier = Modifier.padding(end = 8.dp),
                     )
                 },
@@ -92,9 +93,9 @@ private fun coreStatusText(state: MainUiState): String =
 private fun editorColors(): EditorColors {
     val scheme = MaterialTheme.colorScheme
     return EditorColors(
-        background = scheme.background.toArgb(),
-        text = scheme.onBackground.toArgb(),
-        caret = scheme.primary.toArgb(),
-        composingUnderline = scheme.primary.toArgb(),
+        background = Color(242, 241, 247).toArgb(),
+        text = scheme.onBackground.toArgb(),  // rgb(29, 27, 32)
+        caret = scheme.primary.toArgb(),  // rgb(103, 80, 164)
+        composingUnderline = scheme.primary.toArgb(), // rgb(103, 80, 164)
     )
 }
