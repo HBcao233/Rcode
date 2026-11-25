@@ -1,0 +1,22 @@
+[package]
+name = "rcode-buffer"
+description = "Rope-backed text buffer for Rcode: byte/char/line/UTF-16 queries and edits."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ropey = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+proptest = { workspace = true }
+
+[[bench]]
+name = "buffer"
+harness = false
+
+[lints]
+workspace = true

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/rcode-ffi"]
+members = ["crates/rcode-buffer", "crates/rcode-ffi"]
 
 [workspace.package]
 version = "0.1.0"
@@ -22,3 +22,6 @@ tracing-android = "0.2"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["registry"] }
 thiserror = "2"
 criterion = { version = "0.7", default-features = false }
+# Text storage: only `\n` is a line break (default `unicode_lines` / `cr_lines` off).
+ropey = { version = "1.6.1", default-features = false, features = ["simd"] }
+proptest = "1"
