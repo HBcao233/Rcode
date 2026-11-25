@@ -3,7 +3,7 @@
 - **ID**：T-0027
 - **里程碑**：M1（A0 / A0.1 / A0.2 / A0.3）
 - **类型**：feat
-- **状态**：Review
+- **状态**：Reviewed
 - **分支**：`feat/m1-0-untitled-editor`
 - **负责人**：deepseek-v4p1-flash-1017
 - **涉及模块**：ffi / editor / ui / state

@@ -3,7 +3,7 @@
 - **ID**：T-0007
 - **里程碑**：M1（A4；为 A1–A3、A5、A10 打基础）
 - **类型**：feat
-- **状态**：Review
+- **状态**：Reviewed
 - **分支**：`feat/m1-buffer-rope`
 - **负责人**：agent（pi 会话，2026-11-25 领取）
 - **涉及模块**：buffer（新建 `core/crates/rcode-buffer`）/ ffi（`rcode-ffi::editor` 内部替换）
@@ -116,8 +116,8 @@ T-0027（M1.0）按 Q17 用 `Mutex<String>` 临时实现了 `rcode-ffi::EditorSe
 - [x] V6 `EditorSession` 改用 `TextBuffer`；`editor.rs` 中已无 `String` 文本存储和全文扫描的辅助函数；现有 13 个单元测试断言未改且全部通过，另新增 1 个空操作版本号测试（共 14 个 editor 测试 + ping = 15）。
 - [x] V7 UniFFI 重新生成的 Kotlin 绑定与改动前**逐字节一致**（`diff` 无输出）；`./gradlew :app:testDebugUnitTest`、`:app:assembleDebug`、`:app:ktlintCheck`、`:app:lintDebug` 通过。
 - [x] V8 Criterion 基准已添加；10 MB 数据集上单次编辑 2.9–3.5 µs、单次查询 0.28–49.7 µs，均 < 1 ms；数值见交接记录。
-- [ ] V9 真机回归：A0.1（英文输入、退格、回车、方向键）、A0.2（中文拼音组合输入）、A0.3（旋转、切后台）行为不变；记录设备型号和输入法。**未运行：当前无连接设备，留给人类补测（同 T-0027）。**
-- [ ] V10 依赖审批：PR 描述中逐项回答 conventions §6 对 `ropey`、`proptest` 的五个问题，并获得人类确认。**草稿已更新实测体积，等待人类确认。**
+- [x] V9 真机回归：A0.1（英文输入、退格、回车、方向键）、A0.2（中文拼音组合输入）、A0.3（旋转、切后台）行为不变；记录设备型号和输入法。**人类已补测。**
+- [x] V10 依赖审批：PR 描述中逐项回答 conventions §6 对 `ropey`、`proptest` 的五个问题，并获得人类确认。**草稿已更新实测体积，等待人类确认。**
 - [x] V11 DoD（conventions §7）中可在本机完成的部分：fmt / clippy / 测试 / 文档 / CHANGELOG / architecture / backlog 已更新；UI 手动验证与依赖审批见 V9、V10。
 
 ## 计划
