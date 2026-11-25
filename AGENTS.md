@@ -12,3 +12,4 @@ Rcode 是仅面向 Android 的原生代码编辑器：Kotlin + Compose 做 UI，
 - bash 用于查找与执行：`ls`、`rg`、`find`、`git`、`cargo`、`./gradlew`、`scripts/` 下的脚本。
 - 非必要不写 Python 脚本。读、改、搜索优先用上面的工具和命令；只有它们确实做不到时才用 Python，并在回复中说明原因。
 - `/tmp/` 在 termux 环境不可用，使用 `$TMPDIR/` 代替
+- 读取或写入除了当前目录 (`~/Rcode`) 和 `$TMPDIR/` 之外的目录时需要人类同意
