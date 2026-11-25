@@ -14,6 +14,7 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
 import com.hbcao.rcode.ui.theme.EditorColors
+import kotlin.math.roundToInt
 
 /**
  * Custom text editor view for M1.0.
@@ -66,6 +67,11 @@ class EditorView(
         isFocusableInTouchMode = true
         isClickable = true
         setBackgroundColor(colors.background)
+        val left = dp(8f).roundToInt()
+        val top = dp(0f).roundToInt()
+        val right = left
+        val bottom = top
+        setPadding(left, top, right, bottom)
     }
 
     // region IME / input path
