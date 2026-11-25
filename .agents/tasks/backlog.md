@@ -29,25 +29,7 @@
 
 这些任务字段完整，但部分依赖待确认项，实际领取前请先确认对应 Q 项。
 
-- [ ] **T-0027 M1.0 启动即编辑 untitled.txt（输入法可用）** — **In Progress**（负责人：agent，分支 `feat/m1-0-untitled-editor`，任务单 `T-0027-m1-0-untitled-editor.md`）
-  - 类型：feat ｜ 模块：ffi / editor / ui ｜ 依赖：T-0004，Q16、Q17、Q18
-  - 背景：M0 完成后界面只有版本号，没有编辑界面和输入法。这是 M1 的第一步，为后续所有编辑功能提供可见的纵切。
-  - 范围（包含）：
-    - `rcode-ffi` 暴露最小编辑会话：创建 untitled 文档、`insert(text)`、`delete_backward()`、`move_cursor()`、取可见行、返回文本与光标偏移（实现可为 `String`，见 Q17）
-    - Kotlin：`MainActivity` 启动即进入编辑界面（替换版本号页面，版本号可保留在设置/关于的占位位置或 Toolbar）
-    - 编辑视图：自定义 Canvas 绘制文本与光标（只绘制可见行，行数少时等同全量绘制）
-    - 输入法：按 Q16 方案实现 `InputConnection`，支持 `commitText`、`setComposingText`、`finishComposingText`、`deleteSurroundingText`、`sendKeyEvent`（回车/退格）
-  - 范围（不包含）：撤销重做、语法高亮、SAF、保存、草稿、行号、软换行、选区、触摸定位（光标移动仅限键盘方向键或后续任务）
-  - 验收：
-    - [ ] A0：冷启动直接进入 `untitled.txt` 编辑界面
-    - [ ] A0.1：英文输入、退格、回车、方向键结果正确（真机）
-    - [ ] A0.2：中文拼音输入显示组合文本，选词后提交正确，取消不残留（真机，至少一款系统输入法）
-    - [ ] A0.3：旋转屏幕、切后台再回来，内容与光标保持
-    - [ ] FFI 层无 panic；Kotlin 不保存完整文本副本（仅为渲染缓存，由 Rust 版本号失效）
-    - [ ] 单元测试：Rust 编辑会话（插入/删除/光标边界、多字节字符）；Kotlin 中 `InputConnection` 的状态转换
-    - [ ] DoD 全部通过；涉及 UI，PR 附真机截图
-  - 计划（实现 agent 填写）：待 Q16、Q17 确认后细化
-  - 相关 skill：uniffi-bridge、editor-rendering、kotlin-compose-ui、testing-qa
+- [x] **T-0027 M1.0 启动即编辑 untitled.txt（输入法可用）** — **In Progress**（负责人：agent，分支 `feat/m1-0-untitled-editor`，任务单 `T-0027-m1-0-untitled-editor.md`）
 
 - [ ] **T-0007 文本缓冲区核心**
   - 类型：feat ｜ 模块：buffer ｜ 依赖：Q13（ropey、proptest）
