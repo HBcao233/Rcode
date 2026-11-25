@@ -30,8 +30,8 @@ data class EditorViewportSnapshot(
  * Thin, testable facade over the Rust editing session (`EditorSession` via UniFFI).
  *
  * Kotlin must never keep a full text copy as authoritative state: the UI only stores
- * the viewport snapshot for the current version. All offsets are UTF-8 bytes. This is
- * the temporary M1.0 String-backed session; T-0007 replaces it with a rope.
+ * the viewport snapshot for the current version. All offsets are UTF-8 bytes. The
+ * Rust side stores the text in a rope (`rcode-buffer`, T-0007).
  */
 interface EditorSessionApi : AutoCloseable {
     /** Full document text. For tests and diagnostics only. */
@@ -49,10 +49,19 @@ interface EditorSessionApi : AutoCloseable {
     /** Caret position in UTF-16 code units, the unit Android IME APIs use. */
     fun cursorUtf16Offset(): Int
 
-    /** Inserts [text] at the caret. Returns the new version. */
+    /**
+     * Inserts [text] at the caret. Returns the new version.
+     *
+     * An empty [text] is a no-op and returns the current version unchanged.
+     */
     fun insertText(text: String): Long
 
-    /** Replaces the byte range `startByte until endByte` with [text]. Returns the new version. */
+    /**
+     * Replaces the byte range `startByte until endByte` with [text]. Returns the new version.
+     *
+     * Replacing an empty range with an empty string is a no-op and returns the current
+     * version unchanged.
+     */
     fun replaceRange(
         startByte: Int,
         endByte: Int,

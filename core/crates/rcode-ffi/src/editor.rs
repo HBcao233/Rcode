@@ -1,14 +1,16 @@
-//! Minimal in-memory editing session for M1.0 (T-0027).
+//! Editing session for the M1 editor, backed by `rcode-buffer` (rope text).
 //!
-//! The document is stored in a temporary `String` implementation; T-0007 replaces
-//! it with a rope-backed buffer. All offsets exposed through this module are
-//! **UTF-8 byte offsets** unless the name or documentation says otherwise.
+//! The document text lives in a [`TextBuffer`], so viewport, line and offset
+//! queries are `O(log n)` instead of scanning the whole text. All offsets exposed
+//! through this module are **UTF-8 byte offsets** unless the name or
+//! documentation says otherwise.
 //!
 //! The session is the authoritative owner of text and caret. Kotlin only caches
 //! the viewport returned by [`EditorSession::viewport`] for rendering.
 
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use rcode_buffer::{BufferError, TextBuffer};
 use thiserror::Error;
 
 /// Upper bound for one viewport request, so a bad caller cannot allocate without limit.
@@ -77,24 +79,71 @@ pub struct EditorSession {
     inner: Mutex<Doc>,
 }
 
+/// Number of bytes above which an `usize` length or offset is reported as
+/// `u32::MAX`. M1 files are far below 4 GiB; saturating keeps the mapping
+/// total without silently wrapping.
+fn to_u32(value: usize) -> u32 {
+    value.min(u32::MAX as usize) as u32
+}
+
+/// Maps a buffer error for a range operation to the FFI error, keeping the
+/// range the caller passed in the `InvalidRange` payload.
+fn range_error(start: usize, end: usize, error: BufferError) -> EditorError {
+    match error {
+        BufferError::NotCharBoundary { offset } => EditorError::InvalidOffset {
+            offset: to_u32(offset),
+        },
+        _ => EditorError::InvalidRange {
+            start: to_u32(start),
+            end: to_u32(end),
+        },
+    }
+}
+
+impl From<BufferError> for EditorError {
+    fn from(error: BufferError) -> Self {
+        match error {
+            BufferError::NotCharBoundary { offset } => EditorError::InvalidOffset {
+                offset: to_u32(offset),
+            },
+            BufferError::InvalidRange { start, end } => EditorError::InvalidRange {
+                start: to_u32(start),
+                end: to_u32(end),
+            },
+            BufferError::OutOfBounds { offset, .. } => EditorError::InvalidRange {
+                start: to_u32(offset),
+                end: to_u32(offset),
+            },
+            BufferError::LineOutOfBounds { .. } => EditorError::InvalidRange { start: 0, end: 0 },
+        }
+    }
+}
+
 struct Doc {
-    text: String,
+    /// Authoritative text; owns the version number.
+    buffer: TextBuffer,
     /// Caret as a UTF-8 byte offset; always on a character boundary.
     cursor: usize,
-    version: u64,
 }
 
 impl Doc {
     fn new() -> Self {
         Self {
-            text: String::new(),
+            buffer: TextBuffer::new(),
             cursor: 0,
-            version: 1,
         }
     }
 
-    fn bump_version(&mut self) {
-        self.version = self.version.wrapping_add(1);
+    fn cursor_info(&self) -> EditorCursor {
+        // `cursor` is always a valid boundary, so the fallbacks are unreachable;
+        // they only keep this function panic-free.
+        let line = self.buffer.byte_to_line(self.cursor).unwrap_or(0);
+        let line_start = self.buffer.line_to_byte(line).unwrap_or(self.cursor);
+        EditorCursor {
+            byte_offset: to_u32(self.cursor),
+            line: to_u32(line),
+            column_bytes: to_u32(self.cursor.saturating_sub(line_start)),
+        }
     }
 }
 
@@ -111,29 +160,28 @@ impl EditorSession {
     /// Returns the full document text. Intended for tests and diagnostics; the UI
     /// must use [`Self::viewport`] instead of caching a full copy.
     pub fn text(&self) -> String {
-        self.lock().text.clone()
+        self.lock().buffer.to_string()
     }
 
     /// Current document version. Increments on every text change, not on caret moves.
     pub fn version(&self) -> u64 {
-        self.lock().version
+        self.lock().buffer.version()
     }
 
     /// Number of logical lines (always at least 1).
     pub fn line_count(&self) -> u32 {
-        line_starts(&self.lock().text).len() as u32
+        to_u32(self.lock().buffer.line_count())
     }
 
     /// Current caret position.
     pub fn cursor(&self) -> EditorCursor {
-        let doc = self.lock();
-        cursor_info(&doc, &line_starts(&doc.text))
+        self.lock().cursor_info()
     }
 
     /// Caret position measured in UTF-16 code units (the unit used by Android IME APIs).
     pub fn cursor_utf16_offset(&self) -> u32 {
         let doc = self.lock();
-        doc.text[..doc.cursor].encode_utf16().count() as u32
+        doc.buffer.byte_to_utf16(doc.cursor).map_or(0, to_u32)
     }
 
     /// Inserts `text` at the caret and places the caret after it.
@@ -142,10 +190,12 @@ impl EditorSession {
     pub fn insert_text(&self, text: String) -> u64 {
         let mut doc = self.lock();
         let at = doc.cursor;
-        doc.text.insert_str(at, &text);
-        doc.cursor = at + text.len();
-        doc.bump_version();
-        doc.version
+        // `at` is always a valid character boundary, so this cannot fail.
+        let Ok(edit) = doc.buffer.insert(at, &text) else {
+            return doc.buffer.version();
+        };
+        doc.cursor = edit.new_end_byte;
+        edit.version
     }
 
     /// Replaces the UTF-8 byte range `start_byte..end_byte` with `text` and places
@@ -159,11 +209,13 @@ impl EditorSession {
         text: String,
     ) -> Result<u64, EditorError> {
         let mut doc = self.lock();
-        let (start, end) = validate_range(&doc.text, start_byte, end_byte)?;
-        doc.text.replace_range(start..end, &text);
-        doc.cursor = start + text.len();
-        doc.bump_version();
-        Ok(doc.version)
+        let (start, end) = (start_byte as usize, end_byte as usize);
+        let edit = doc
+            .buffer
+            .replace(start..end, &text)
+            .map_err(|error| range_error(start, end, error))?;
+        doc.cursor = edit.new_end_byte;
+        Ok(edit.version)
     }
 
     /// Deletes the UTF-8 byte range `start_byte..end_byte` and places the caret at
@@ -177,13 +229,17 @@ impl EditorSession {
     pub fn delete_backward(&self) -> u64 {
         let mut doc = self.lock();
         let cursor = doc.cursor;
-        let Some(prev) = prev_char_boundary(&doc.text, cursor) else {
-            return doc.version;
+        let Some(previous) = doc.buffer.prev_char_boundary(cursor) else {
+            return doc.buffer.version();
         };
-        doc.text.replace_range(prev..cursor, "");
-        doc.cursor = prev;
-        doc.bump_version();
-        doc.version
+        match doc.buffer.delete(previous..cursor) {
+            Ok(edit) => {
+                doc.cursor = previous;
+                edit.version
+            }
+            // Both offsets are character boundaries, so this cannot fail.
+            Err(_) => doc.buffer.version(),
+        }
     }
 
     /// Deletes the character after the caret. No-op at the end of the document.
@@ -191,65 +247,68 @@ impl EditorSession {
     pub fn delete_forward(&self) -> u64 {
         let mut doc = self.lock();
         let cursor = doc.cursor;
-        let Some(next) = next_char_boundary(&doc.text, cursor) else {
-            return doc.version;
+        let Some(next) = doc.buffer.next_char_boundary(cursor) else {
+            return doc.buffer.version();
         };
-        doc.text.replace_range(cursor..next, "");
-        doc.bump_version();
-        doc.version
+        match doc.buffer.delete(cursor..next) {
+            Ok(edit) => edit.version,
+            // Both offsets are character boundaries, so this cannot fail.
+            Err(_) => doc.buffer.version(),
+        }
     }
 
     /// Moves the caret to `byte_offset`, clamped to the document and snapped down to
     /// the nearest UTF-8 character boundary. Returns the resulting byte offset.
     pub fn move_cursor(&self, byte_offset: u32) -> u32 {
         let mut doc = self.lock();
-        doc.cursor =
-            floor_char_boundary(&doc.text, byte_offset.min(doc.text.len() as u32) as usize);
-        doc.cursor as u32
+        doc.cursor = doc.buffer.floor_char_boundary(byte_offset as usize);
+        to_u32(doc.cursor)
     }
 
     /// Moves the caret by `delta_chars` Unicode scalar values (negative moves left).
     /// Returns the resulting byte offset.
     pub fn move_cursor_horizontal(&self, delta_chars: i32) -> u32 {
         let mut doc = self.lock();
-        let target = if delta_chars >= 0 {
-            let mut cursor = doc.cursor;
+        let mut cursor = doc.cursor;
+        if delta_chars >= 0 {
             for _ in 0..delta_chars {
-                let Some(next) = next_char_boundary(&doc.text, cursor) else {
+                let Some(next) = doc.buffer.next_char_boundary(cursor) else {
                     break;
                 };
                 cursor = next;
             }
-            cursor
         } else {
-            let mut cursor = doc.cursor;
             for _ in 0..delta_chars.unsigned_abs() {
-                let Some(prev) = prev_char_boundary(&doc.text, cursor) else {
+                let Some(previous) = doc.buffer.prev_char_boundary(cursor) else {
                     break;
                 };
-                cursor = prev;
+                cursor = previous;
             }
-            cursor
-        };
-        doc.cursor = target;
-        doc.cursor as u32
+        }
+        doc.cursor = cursor;
+        to_u32(cursor)
     }
 
     /// Moves the caret by `delta_lines`, keeping the byte column when possible and
     /// clamping to the target line length. Returns the resulting byte offset.
     pub fn move_cursor_vertical(&self, delta_lines: i32) -> u32 {
         let mut doc = self.lock();
-        let starts = line_starts(&doc.text);
-        let line = line_of_offset(&starts, doc.cursor);
-        let column = doc.cursor - starts[line];
+        let line = doc.buffer.byte_to_line(doc.cursor).unwrap_or(0);
+        let line_start = doc.buffer.line_to_byte(line).unwrap_or(doc.cursor);
+        let line_count = doc.buffer.line_count();
         let target =
-            (line as i64 + i64::from(delta_lines)).clamp(0, starts.len() as i64 - 1) as usize;
-        let start = starts[target];
-        let content_end = line_content_end(&doc.text, &starts, target);
-        let max_column = content_end - start;
-        let column = column.min(max_column);
-        doc.cursor = start + floor_char_boundary(&doc.text[start..content_end], column);
-        doc.cursor as u32
+            (line as i64 + i64::from(delta_lines)).clamp(0, line_count as i64 - 1) as usize;
+        let target_start = doc.buffer.line_to_byte(target).unwrap_or(0);
+        let content = doc
+            .buffer
+            .line_content_range(target)
+            .unwrap_or(target_start..target_start);
+        let column = doc
+            .cursor
+            .saturating_sub(line_start)
+            .min(content.end.saturating_sub(content.start));
+        doc.cursor = doc.buffer.floor_char_boundary(target_start + column);
+        to_u32(doc.cursor)
     }
 
     /// Returns up to `max_lines` consecutive lines starting at `first_line`.
@@ -258,29 +317,25 @@ impl EditorSession {
     /// One call returns a whole viewport, so Kotlin never loops over lines.
     pub fn viewport(&self, first_line: u32, max_lines: u32) -> EditorViewport {
         let doc = self.lock();
-        let starts = line_starts(&doc.text);
-        let line_count = starts.len() as u32;
-        let first = first_line.min(line_count.saturating_sub(1));
-        let count = max_lines
-            .clamp(1, MAX_VIEWPORT_LINES)
-            .min(line_count - first);
-        let lines = (first..first + count)
-            .map(|index| {
-                let start = starts[index as usize];
-                let end = line_content_end(&doc.text, &starts, index as usize);
-                EditorLine {
-                    index,
-                    start_byte: start as u32,
-                    text: doc.text[start..end].to_string(),
-                }
+        let line_count = doc.buffer.line_count();
+        let first = (first_line as usize).min(line_count.saturating_sub(1));
+        let count = (max_lines.clamp(1, MAX_VIEWPORT_LINES) as usize).min(line_count - first);
+        let lines = doc
+            .buffer
+            .lines(first, count)
+            .into_iter()
+            .map(|line| EditorLine {
+                index: to_u32(line.index),
+                start_byte: to_u32(line.start_byte),
+                text: doc.buffer.slice_to_string(line.content).unwrap_or_default(),
             })
             .collect();
         EditorViewport {
-            version: doc.version,
-            line_count,
-            first_line: first,
+            version: doc.buffer.version(),
+            line_count: to_u32(line_count),
+            first_line: to_u32(first),
             lines,
-            cursor: cursor_info(&doc, &starts),
+            cursor: doc.cursor_info(),
         }
     }
 
@@ -288,14 +343,18 @@ impl EditorSession {
     /// the caret. Used by `InputConnection.getTextBeforeCursor`.
     pub fn context_before_cursor(&self, max_utf16_units: u32) -> String {
         let doc = self.lock();
-        utf16_suffix(&doc.text[..doc.cursor], max_utf16_units as usize).to_string()
+        doc.buffer
+            .utf16_context_before(doc.cursor, max_utf16_units as usize)
+            .unwrap_or_default()
     }
 
     /// Returns up to `max_utf16_units` UTF-16 code units of text immediately after
     /// the caret. Used by `InputConnection.getTextAfterCursor`.
     pub fn context_after_cursor(&self, max_utf16_units: u32) -> String {
         let doc = self.lock();
-        utf16_prefix(&doc.text[doc.cursor..], max_utf16_units as usize).to_string()
+        doc.buffer
+            .utf16_context_after(doc.cursor, max_utf16_units as usize)
+            .unwrap_or_default()
     }
 }
 
@@ -306,124 +365,6 @@ impl EditorSession {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
-}
-
-/// Byte offsets of the first character of every logical line. Always contains `0`,
-/// plus one entry after each `\n`; an empty document has exactly one line.
-fn line_starts(text: &str) -> Vec<usize> {
-    let mut starts = Vec::with_capacity(8);
-    starts.push(0);
-    for (index, byte) in text.bytes().enumerate() {
-        if byte == b'\n' {
-            starts.push(index + 1);
-        }
-    }
-    starts
-}
-
-/// Zero-based line index containing `offset`.
-fn line_of_offset(starts: &[usize], offset: usize) -> usize {
-    match starts.binary_search(&offset) {
-        Ok(index) => index,
-        Err(index) => index - 1,
-    }
-}
-
-/// End of the visible content of `line` (the next line start minus the newline and,
-/// for CRLF, the preceding carriage return).
-fn line_content_end(text: &str, starts: &[usize], line: usize) -> usize {
-    let Some(&next) = starts.get(line + 1) else {
-        return text.len();
-    };
-    let mut end = next - 1;
-    if end > starts[line] && text.as_bytes()[end - 1] == b'\r' {
-        end -= 1;
-    }
-    end
-}
-
-fn cursor_info(doc: &Doc, starts: &[usize]) -> EditorCursor {
-    let line = line_of_offset(starts, doc.cursor);
-    EditorCursor {
-        byte_offset: doc.cursor as u32,
-        line: line as u32,
-        column_bytes: (doc.cursor - starts[line]) as u32,
-    }
-}
-
-/// Largest character boundary at or below `offset`.
-fn floor_char_boundary(text: &str, offset: usize) -> usize {
-    let mut offset = offset.min(text.len());
-    while offset > 0 && !text.is_char_boundary(offset) {
-        offset -= 1;
-    }
-    offset
-}
-
-fn prev_char_boundary(text: &str, offset: usize) -> Option<usize> {
-    text.get(..offset)?
-        .chars()
-        .next_back()
-        .map(|c| offset - c.len_utf8())
-}
-
-fn next_char_boundary(text: &str, offset: usize) -> Option<usize> {
-    text.get(offset..)?
-        .chars()
-        .next()
-        .map(|c| offset + c.len_utf8())
-}
-
-fn validate_range(
-    text: &str,
-    start_byte: u32,
-    end_byte: u32,
-) -> Result<(usize, usize), EditorError> {
-    let start = start_byte as usize;
-    let end = end_byte as usize;
-    if start > end || end > text.len() {
-        return Err(EditorError::InvalidRange {
-            start: start_byte,
-            end: end_byte,
-        });
-    }
-    if !text.is_char_boundary(start) {
-        return Err(EditorError::InvalidOffset { offset: start_byte });
-    }
-    if !text.is_char_boundary(end) {
-        return Err(EditorError::InvalidOffset { offset: end_byte });
-    }
-    Ok((start, end))
-}
-
-/// Suffix of `text` containing at most `max_units` UTF-16 code units.
-fn utf16_suffix(text: &str, max_units: usize) -> &str {
-    let mut units = 0usize;
-    let mut start = text.len();
-    for (index, character) in text.char_indices().rev() {
-        let width = character.len_utf16();
-        if units + width > max_units {
-            break;
-        }
-        units += width;
-        start = index;
-    }
-    &text[start..]
-}
-
-/// Prefix of `text` containing at most `max_units` UTF-16 code units.
-fn utf16_prefix(text: &str, max_units: usize) -> &str {
-    let mut units = 0usize;
-    let mut end = 0usize;
-    for (index, character) in text.char_indices() {
-        let width = character.len_utf16();
-        if units + width > max_units {
-            break;
-        }
-        units += width;
-        end = index + character.len_utf8();
-    }
-    &text[..end]
 }
 
 #[cfg(test)]
@@ -626,6 +567,24 @@ mod tests {
         session.move_cursor(1);
         session.move_cursor_horizontal(1);
         session.move_cursor_vertical(1);
+        assert_eq!(session.version(), version);
+    }
+
+    #[test]
+    fn empty_edits_do_not_change_the_version() {
+        // Deliberate change from M1.0 (T-0007): no-op edits no longer bump the
+        // version, so Kotlin does not redraw for nothing.
+        let session = session_with("abc");
+        let version = session.version();
+        assert_eq!(session.insert_text(String::new()), version);
+        let replaced = session.replace_range(1, 1, String::new());
+        assert!(
+            replaced.is_ok(),
+            "empty replace must be accepted: {replaced:?}"
+        );
+        assert_eq!(replaced.unwrap_or_default(), version);
+        assert_eq!(session.delete_range(2, 2).unwrap_or_default(), version);
+        assert_eq!(session.text(), "abc");
         assert_eq!(session.version(), version);
     }
 }

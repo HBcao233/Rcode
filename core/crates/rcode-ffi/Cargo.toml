@@ -11,6 +11,7 @@ crate-type = ["cdylib", "staticlib", "lib"]
 name = "rcode_ffi"
 
 [dependencies]
+rcode-buffer = { path = "../rcode-buffer" }
 uniffi = "0.32.2"
 thiserror = { workspace = true }
 tracing = { workspace = true }
