@@ -32,7 +32,7 @@
 - [x] **T-0027 启动即编辑 untitled.txt（输入法可用）**
   - 任务单 `T-0027-untitled-editor.md`
 
-- [ ] **T-0007 文本缓冲区核心（rope 替换 M1.0 临时 String）** — 待确认（Q-T7-1 ropey 版本、Q-T7-2 换行语义）
+- [ ] **T-0007 文本缓冲区核心（rope 替换 M1.0 临时 String）** — Review（`feat/m1-buffer-rope`；自动化检查通过，V9 真机回归与 V10 依赖审批待人类）
   - 任务单 `T-0007-text-buffer.md`
   - 类型：feat ｜ 模块：buffer、ffi ｜ 依赖：Q13（ropey、proptest）、T-0027
   - 范围：新建 `core/crates/rcode-buffer`，基于 rope 的插入、删除、替换；按行、字节、字符（Unicode scalar）、UTF-16 查询；版本号递增；`rcode-ffi::EditorSession` 改用它（FFI 签名不变）。

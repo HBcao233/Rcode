@@ -3,9 +3,9 @@
 - **ID**：T-0007
 - **里程碑**：M1（A4；为 A1–A3、A5、A10 打基础）
 - **类型**：feat
-- **状态**：待确认（Q-T7-1、Q-T7-2 回答后转 Ready）
-- **分支**：`feat/m1-buffer-rope`（领取时创建）
-- **负责人**：（未领取）
+- **状态**：Review
+- **分支**：`feat/m1-buffer-rope`
+- **负责人**：agent（pi 会话，2026-11-25 领取）
 - **涉及模块**：buffer（新建 `core/crates/rcode-buffer`）/ ffi（`rcode-ffi::editor` 内部替换）
 - **相关 skill**：rust-core、testing-qa、perf-benchmark（改 FFI 签名时加 uniffi-bridge，按本单范围不应需要）
 
@@ -108,33 +108,25 @@ T-0027（M1.0）按 Q17 用 `Mutex<String>` 临时实现了 `rcode-ffi::EditorSe
 
 ## 验收标准
 
-- [ ] V1 `core/crates/rcode-buffer` 已加入 workspace，不依赖 uniffi；`rcode-ffi` 是 Kotlin 唯一可见的 crate（architecture §4）。
-- [ ] V2 A4：`prop_buffer` 属性测试以 1000 个用例运行通过，断言覆盖“B. 属性测试”的 1–5 项；字符池覆盖 ASCII / CJK / 代理对 / `\n` / `\r\n` / 单独 `\r`。
-- [ ] V3 单元测试覆盖“C. 单元测试”列出的边界情况，并全部通过。
-- [ ] V4 公开 API 全部有 `///` 文档并注明单位；`cargo doc -p rcode-buffer --no-deps` 无警告。
-- [ ] V5 库代码中没有 `unwrap` / `expect` / `panic!`，也没有可能越界的切片下标；所有 ropey 调用都已校验参数，或使用 `try_*` 变体（审查时逐个确认）。
-- [ ] V6 `EditorSession` 改用 `TextBuffer`；`editor.rs` 中已无 `String` 文本存储和全文扫描的辅助函数；`editor.rs` 现有 13 个单元测试未改断言且全部通过（空操作版本号那一条按 E 节处理，如有调整需在任务单写明）。
-- [ ] V7 UniFFI 重新生成的 Kotlin 绑定与改动前一致（附 `diff` 结果）；`./gradlew :app:testDebugUnitTest`、`:app:assembleDebug`、`:app:ktlintCheck`、`:app:lintDebug` 通过。
-- [ ] V8 Criterion 基准已添加；10 MB 数据集上单次编辑和单次查询的中位数 < 1 ms，数值按 perf-benchmark 模板记录在交接记录中。
-- [ ] V9 真机回归：A0.1（英文输入、退格、回车、方向键）、A0.2（中文拼音组合输入）、A0.3（旋转、切后台）行为不变；记录设备型号和输入法。
-- [ ] V10 依赖审批：PR 描述中逐项回答 conventions §6 对 `ropey`、`proptest` 的五个问题（初稿见下方“依赖检查草稿”），并获得人类确认。
-- [ ] V11 DoD（conventions §7）全部满足；更新 CHANGELOG、architecture §3.3、backlog。
+- [x] V1 `core/crates/rcode-buffer` 已加入 workspace，不依赖 uniffi；`rcode-ffi` 是 Kotlin 唯一可见的 crate（architecture §4）。
+- [x] V2 A4：`prop_buffer` 属性测试以 1000 个用例运行通过，断言覆盖“B. 属性测试”的 1–5 项；字符池覆盖 ASCII / CJK / 代理对 / `\n` / `\r\n` / 单独 `\r`。
+- [x] V3 单元测试覆盖“C. 单元测试”列出的边界情况，并全部通过（12 个）。
+- [x] V4 公开 API 全部有 `///` 文档并注明单位；`cargo doc -p rcode-buffer --no-deps` 无警告。
+- [x] V5 库代码中没有 `unwrap` / `expect` / `panic!`，也没有可能越界的切片下标；所有 ropey 调用都已校验参数，或使用 `try_*` 变体。实现时发现“行末去 `\r`”只在有 `\n` 结尾时才允许，已修正并用单元测试与属性测试覆盖。
+- [x] V6 `EditorSession` 改用 `TextBuffer`；`editor.rs` 中已无 `String` 文本存储和全文扫描的辅助函数；现有 13 个单元测试断言未改且全部通过，另新增 1 个空操作版本号测试（共 14 个 editor 测试 + ping = 15）。
+- [x] V7 UniFFI 重新生成的 Kotlin 绑定与改动前**逐字节一致**（`diff` 无输出）；`./gradlew :app:testDebugUnitTest`、`:app:assembleDebug`、`:app:ktlintCheck`、`:app:lintDebug` 通过。
+- [x] V8 Criterion 基准已添加；10 MB 数据集上单次编辑 2.9–3.5 µs、单次查询 0.28–49.7 µs，均 < 1 ms；数值见交接记录。
+- [ ] V9 真机回归：A0.1（英文输入、退格、回车、方向键）、A0.2（中文拼音组合输入）、A0.3（旋转、切后台）行为不变；记录设备型号和输入法。**未运行：当前无连接设备，留给人类补测（同 T-0027）。**
+- [ ] V10 依赖审批：PR 描述中逐项回答 conventions §6 对 `ropey`、`proptest` 的五个问题，并获得人类确认。**草稿已更新实测体积，等待人类确认。**
+- [x] V11 DoD（conventions §7）中可在本机完成的部分：fmt / clippy / 测试 / 文档 / CHANGELOG / architecture / backlog 已更新；UI 手动验证与依赖审批见 V9、V10。
 
 ## 计划
 
-（实现 agent 领取后可调整，以下为建议切分。改动预计超过 400 行，建议拆成两个 PR，或至少拆成两组独立提交，每组都能编译且测试通过。）
+实际执行（两组代码提交 + 一组文档提交，每组都能独立编译并通过测试）：
 
-**第一部分：`rcode-buffer` crate（不影响 app）**
-
-1. 建 crate 骨架、README、`BufferError`；在 workspace 中加入 `ropey`（按 Q-T7-1 的版本和 feature）和 `proptest`（dev-dependency）。提交：`chore(buffer): scaffold rcode-buffer crate`。
-2. 先写 `prop_buffer.rs` 和单元测试（此时失败），再实现 `TextBuffer` 的编辑、换算和行查询。提交：`feat(buffer): rope-backed TextBuffer with byte/char/line queries`。
-3. 加 UTF-16 换算与上下文辅助及对应测试；加 Criterion 基准，记录数值。提交：`feat(buffer): utf16 helpers and benchmarks`。
-
-**第二部分：替换 FFI 存储**
-
-4. `rcode-ffi` 引入 `rcode-buffer`，重写 `Doc`，删除旧辅助函数，实现 `From<BufferError>`；跑现有 13 个 editor 测试。提交：`refactor(ffi): back EditorSession with rcode-buffer`。
-5. 运行 `scripts/build-core.sh`，diff 生成的绑定；跑 Gradle 检查；真机回归 V9。
-6. 更新 architecture、CHANGELOG、注释、backlog 和本任务单交接记录。提交：`docs: record T-0007 rope buffer`。
+1. `feat(buffer): add rope-backed TextBuffer crate` — 新建 crate、`BufferError`、编辑/换算/行查询、UTF-16 上下文、单元测试、1000 用例属性测试、Criterion 基准、crate README。
+2. `refactor(ffi): back EditorSession with rcode-buffer` — `rcode-ffi` 依赖 `rcode-buffer`，重写 `Doc`，删除旧辅助函数，补 `range_error` / `From<BufferError>`；重新生成绑定并 diff；更新 Kotlin KDoc。
+3. `docs: record T-0007 rope buffer` — architecture、CHANGELOG、术语表、任务单、backlog。
 
 ## 测试方案
 
@@ -159,7 +151,7 @@ scripts/build-core.sh                        # 重新生成绑定后 git diff / 
 |---|---|---|
 | 1 许可证 | 1.6.1：MIT；2.0.0-beta.1：MIT OR Apache-2.0。均兼容 | MIT OR Apache-2.0 |
 | 2 近 12 个月维护 | 1.x 最后一次发布 1.6.1 是 2023-10，**超过 12 个月**；但仓库 2026-09 仍有提交（2.0 开发中）。2.0 beta 发布于 2025-08 | 1.12.0 发布于 2026-10，活跃 |
-| 3 体积 | 源码约 120 KB，运行时依赖只有 `smallvec`、`str_indices`；`.so` 体积增量预计为几十 KB 量级，需在 PR 中实测 `librcode_ffi.so` 前后大小 | 不进入 APK |
+| 3 体积 | 源码约 120 KB，运行时依赖只有 `smallvec`、`str_indices`。实测 arm64-v8a release `librcode_ffi.so`：改动前 989,072 B → 改动后 1,166,352 B，**+177,280 B（约 173 KiB，+17.9%）**；`proptest` 不进入 APK | 不进入 APK |
 | 4 替代方案 | `crop`（0.4，B-tree rope，原生字节索引，社区较小）；自研 piece table（工作量大、风险高）。选 ropey：architecture §5 已列为首选，Helix/Lapce 等编辑器长期使用 | `quickcheck`：收缩能力和策略组合不如 proptest；proptest 也是 roadmap A4/A5 指定工具 |
 | 5 FFI/线程复杂度 | 无。`Rope` 是 `Send + Sync` 的纯数据结构，仍由 `EditorSession` 的 `Mutex` 保护，不跨 FFI 暴露 | 无 |
 
@@ -177,13 +169,80 @@ scripts/build-core.sh                        # 重新生成绑定后 git diff / 
 
 ## 阻塞
 
-- （无）V9 真机回归需要连接 arm64 设备；当前 Termux 环境无法连接，按 T-0027 的方式在交接记录中注明，由人类补测。
+- V9 真机回归需要连接 arm64 设备；当前 Termux 环境无法连接（`adb devices` 无设备），按 T-0027 的方式由人类补测。
+- V10 依赖审批等待人类在 PR 中确认。
 
 ## 交接记录
 
-- 日期：
-- 分支与提交：
+### 2026-11-25（实现者：pi agent）
+
+- 状态：**Review**（代码与自动化检查完成，等待审查；V9/V10 留给人类）。
+- 分支与提交：`feat/m1-buffer-rope`；`c377f8f`（buffer crate）、`fa62d6e`（ffi 替换）、本任务单所在文档提交（`docs: record T-0007 rope buffer`）。
 - 已完成：
+  - 新建 `core/crates/rcode-buffer`（`TextBuffer`、`BufferError`、`Edit`、`BufferLine`）：字节/字符/行/UTF-16 换算、边界辅助、行查询与批量取行、UTF-16 上下文、版本号；全部公开 API 带单位文档；库代码无 `unwrap`/`expect`/`panic!`，只调用已校验参数或 `try_*` 的 ropey API。
+  - 1000 用例属性测试（`tests/prop_buffer.rs`）：随机 insert/delete/replace，含越界、非字符边界、反向区间；每步校验全文、长度、行数据、全部换算往返、版本号、错误类型与 `Edit` 回放；失败种子路径 `core/tests/regressions/prop_buffer.txt`。
+  - 12 个单元测试 + Criterion 基准（`benches/buffer.rs`，固定种子生成 10 MB）。
+  - `rcode-ffi::EditorSession` 改用 `TextBuffer`，删除全部全文扫描辅助函数；UniFFI 导出签名、Record 与错误变体未变。
 - 未完成：
-- 测试结果：
-- 下一步建议：
+  - V9 真机回归 A0.1–A0.3（无设备）；V10 依赖审批需人类确认。
+  - 未运行 `:app:connectedDebugAndroidTest`（无设备）。
+
+#### 测试结果（实际运行）
+
+```
+命令: cd core && cargo fmt --all -- --check
+结果: 通过（无输出）
+
+命令: cd core && cargo clippy --workspace --all-targets -- -D warnings
+结果: 通过（Finished dev profile）
+
+命令: cd core && cargo test --workspace
+结果: 通过（rcode-buffer 单元 12 passed；prop_buffer 1000 cases 1 passed（8.7–9.7 s）；rcode-ffi 15 passed；0 failed）
+
+命令: cd core && cargo doc -p rcode-buffer --no-deps
+结果: 通过（无警告）
+
+命令: cd core && cargo bench -p rcode-buffer
+结果: 通过，数值见下
+
+命令: bash scripts/build-core.sh（PATH 含 ~/.cargo/bin，CARGO_NDK_ON_ANDROID=1）
+结果: 通过；`librcode_ffi.so` 1,166,352 B
+
+命令: diff -u <改动前绑定> <重新生成的 rcode_ffi.kt>
+结果: 逐字节一致（无 diff 输出）
+
+命令: ./gradlew :app:ktlintCheck :app:testDebugUnitTest
+结果: BUILD SUCCESSFUL in 1m 28s
+
+命令: ./gradlew :app:lintDebug :app:assembleDebug
+结果: BUILD SUCCESSFUL in 3m 42s
+```
+
+#### 基准（perf-benchmark 模板）
+
+```
+任务: T-0007
+设备: WIKO GAR-AN60 / Android 11 / Termux aarch64（Rust release，cargo bench）
+数据集: 合成 10 MB（约 70% ASCII、25% CJK、5% emoji），平均行长约 80 字节，固定种子
+指标（中位数）:
+  from_str_10mb          23.9 ms（仅记录；首屏在 T-0014/T-0025 测）
+  insert_one_char_middle  2.90 µs
+  delete_middle_line      3.45 µs
+  viewport_100_lines     49.7 µs
+  byte_to_line           277 ns
+  byte_to_utf16          398 ns
+结论: 通过（单次编辑与单次查询均 < 1 ms，远低于 4 ms UI 线程预算；但 on-device JNI 开销需 T-0025 再核）
+```
+
+#### 说明与遗留
+
+- 行为变更（有意）：`insert_text("")`、`replace_range(a, a, "")`、空 `delete_range` 不再递增版本号；新增 `empty_edits_do_not_change_the_version` 测试，Kotlin 侧无需改动。
+- 实现时发现并修正的语义边界：行末 `\r` 只在行以 `\n` 结尾时才剔除；文档最后一行末尾的 `\r` 是内容（属性测试与单元测试均覆盖）。
+- 工作区中有两处**非本任务**的未提交修改（`scripts/build-core.sh` 增加 `CARGO_NDK_ON_ANDROID=1`、`uniffi-bridge` skill 改用 `bash ./scripts/build-core.sh`），看起来是 Termux 环境修复，未纳入本任务提交，请人类确认后另开 `chore`。
+
+#### 下一步建议
+
+1. 审查 diff（重点：`core/crates/rcode-buffer/src/lib.rs` 的边界/错误映射、`editor.rs` 的 `u32` 饱和转换）。
+2. 人类在 PR 中确认 V10 依赖清单（`ropey` +177 KB `.so` 是主要成本）。
+3. 有设备时补测 V9（英文/拼音输入、退格、回车、方向键、旋转、切后台），然后在 backlog 将 T-0007 标记为已完成。
+4. 合并后 T-0008（撤销/重做）可直接使用 `Edit` 记录；T-0019 可用 `Edit` 做增量解析范围。

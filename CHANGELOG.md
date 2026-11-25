@@ -21,3 +21,14 @@ All notable changes are documented here. Format follows Keep a Changelog.
 - `InputConnection` support for English/CJK IME input: `commitText`, `setComposingText`, `finishComposingText`, `deleteSurroundingText` (UTF-16 and code point variants), Enter/Delete/arrow key events.
 - Composing span state machine (`EditorInputHandler`) with JVM unit tests; session survives activity rotation via the ViewModel.
 - Instrumented tests for the cold-start screen (A0) and FFI editing session.
+
+### T-0007 (rope text buffer)
+- Added `rcode-buffer`, a rope-backed text buffer (`ropey`). Byte/char/line/UTF-16
+  offset conversions and line lookups are `O(log n)` instead of full-document scans.
+  Public API is documented with units; 1000-case property tests compare it against a
+  `String` reference model.
+- Changed `EditorSession` (Rust) to store text in `rcode-buffer::TextBuffer`. The
+  UniFFI surface is unchanged, so Kotlin needed no code changes.
+- Changed: no-op edits (`insert_text("")`, `replace_range(a, a, "")`, empty
+  `delete_range`) no longer increment the document version.
+- Added Criterion benchmarks for the buffer on a synthetic 10 MB document.

@@ -3,6 +3,11 @@
 | 术语 | 含义 |
 |---|---|
 | Rope | 以平衡树存储文本的数据结构，适合大文件的插入和删除 |
+| Unicode scalar value | 一个 Unicode 码点（Rust `char`），范围为 U+0000..=U+10FFFF。一个字符可能由多个 UTF-8 字节表示 |
+| UTF-16 code unit | UTF-16 的基本存储单元（16 位）。补充平面字符（如 emoji）占两个 code unit（代理对），Android IME API 以此为计数单位 |
+| 字节偏移 | 从文档开头数起的 UTF-8 字节数；必须落在字符边界上 |
+| 字符偏移 | 从文档开头数起的 Unicode scalar 个数，也称 char offset |
+| 行（逻辑行） | 缓冲区中只以 `\n` 分隔的行；行号从 0 开始，行数 = `\n` 个数 + 1 |
 | Buffer | 文档的文本内容及其编辑历史，由 Rust 持有 |
 | Span | 高亮区间，包含起止偏移和样式类别 |
 | Viewport | 当前屏幕可见的文本区域 |
