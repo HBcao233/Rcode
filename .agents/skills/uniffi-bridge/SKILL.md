@@ -22,7 +22,7 @@ description: Define and modify the UniFFI interface between Rust (core/crates/rc
 1. 在 `core/crates/rcode-ffi/src/` 中修改接口定义。
 2. 生成绑定（由 `scripts/` 中的脚本统一执行，不要手写 Kotlin 绑定）：
    ```bash
-   ./scripts/build-core.sh   # 包含 cargo-ndk 构建与 uniffi-bindgen
+   bash ./scripts/build-core.sh   # 包含 cargo-ndk 构建与 uniffi-bindgen
    ```
 3. 在 `app/src/test` 中为封装层写单元测试（如果封装层有逻辑）。
 4. 运行端到端检查：`./gradlew :app:connectedDebugAndroidTest`（如有模拟器）或至少 `assembleDebug`。

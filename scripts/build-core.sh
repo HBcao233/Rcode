@@ -11,6 +11,8 @@
 #   PROFILE           release (default) | debug
 set -euo pipefail
 
+export CARGO_NDK_ON_ANDROID=1
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CORE="$ROOT/core"
 APP="$ROOT/app/src/main"
