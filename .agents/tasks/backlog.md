@@ -29,11 +29,13 @@
 
 这些任务字段完整，但部分依赖待确认项，实际领取前请先确认对应 Q 项。
 
-- [x] **T-0027 M1.0 启动即编辑 untitled.txt（输入法可用）** — **In Progress**（负责人：agent，分支 `feat/m1-0-untitled-editor`，任务单 `T-0027-m1-0-untitled-editor.md`）
+- [x] **T-0027 启动即编辑 untitled.txt（输入法可用）**
+  - 任务单 `T-0027-untitled-editor.md`
 
-- [ ] **T-0007 文本缓冲区核心**
-  - 类型：feat ｜ 模块：buffer ｜ 依赖：Q13（ropey、proptest）
-  - 范围：`core/crates/rcode-buffer`，基于 rope 的插入、删除、替换；按行、字节、字符（Unicode scalar）查询；版本号递增。
+- [ ] **T-0007 文本缓冲区核心（rope 替换 M1.0 临时 String）** — 待确认（Q-T7-1 ropey 版本、Q-T7-2 换行语义）
+  - 任务单 `T-0007-text-buffer.md`
+  - 类型：feat ｜ 模块：buffer、ffi ｜ 依赖：Q13（ropey、proptest）、T-0027
+  - 范围：新建 `core/crates/rcode-buffer`，基于 rope 的插入、删除、替换；按行、字节、字符（Unicode scalar）、UTF-16 查询；版本号递增；`rcode-ffi::EditorSession` 改用它（FFI 签名不变）。
   - 验收：A4 中的 proptest 通过（≥1000 用例）；公开 API 带单位说明的 `///` 文档；无 `unwrap`/`expect`。
   - 相关 skill：rust-core、testing-qa
 

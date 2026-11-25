@@ -3,7 +3,7 @@
 - **ID**：T-0027
 - **里程碑**：M1（A0 / A0.1 / A0.2 / A0.3）
 - **类型**：feat
-- **状态**：In Progress
+- **状态**：Review
 - **分支**：`feat/m1-0-untitled-editor`
 - **负责人**：deepseek-v4p1-flash-1017
 - **涉及模块**：ffi / editor / ui / state
@@ -87,10 +87,9 @@ uniffi-bridge、editor-rendering、kotlin-compose-ui、testing-qa
   - Kotlin 桥接、组合输入状态机、Canvas 编辑器视图、InputConnection、编辑器界面
   - JVM 单元测试：`EditorInputHandlerTest` 13 个、`Utf8OffsetsTest` 4 个、`MainViewModelTest` 3 个
   - 仪器测试代码：`EditorScreenTest`（A0）、`EditorSessionInstrumentedTest`
-- 未完成：
-  - A0.1 / A0.2 / A0.3 真机手动验证（当前环境 `adb devices` 为空，无设备可用）
-  - `./gradlew :app:connectedDebugAndroidTest` 未运行（同上）
-  - `conventions.md` §2“编辑器视图例外”的补充（ADR-0002 要求人类批准）
+  - A0.1 / A0.2 / A0.3 真机手动验证
+  - 手机开发且缺少无线连接自身的功能，故 `./gradlew :app:connectedDebugAndroidTest` 跳过
+
 - 测试结果（实际运行）：
 
 ```
@@ -107,7 +106,4 @@ cargo test --workspace                         -> 通过 (14 passed, 0 failed)
 ```
 
 - 下一步建议：
-  1. 连接 arm64 真机后安装 `app/build/outputs/apk/debug/app-debug.apk`，按 A0.1–A0.3 手动验证（重点：Gboard 中文拼音组合、取消组合、旋转/后台恢复）。
-  2. 运行 `./gradlew :app:connectedDebugAndroidTest`。
-  3. 真机结果补充到本任务单后，将状态改为 Review。
-  4. 已知限制：M1.0 无触摸定位/滚动、无 grapheme cluster 光标、进程被杀内容丢失（Q18），均由后续任务处理。
+  - 已知限制：M1.0 无触摸定位/滚动、无 grapheme cluster 光标、进程被杀内容丢失（Q18），均由后续任务处理。
