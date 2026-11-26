@@ -463,12 +463,12 @@ mod tests {
         let invalid = session.replace_range(1, 3, "x".to_string());
         assert!(matches!(
             invalid,
-            Err(EditorError::InvalidOffset { offset: 1 })
+            Err(EditorError::NotCharBoundary { offset: 1 })
         ));
         let out_of_bounds = session.replace_range(0, 99, "x".to_string());
         assert!(matches!(
             out_of_bounds,
-            Err(EditorError::InvalidRange { .. })
+            Err(EditorError::OutOfBounds { .. })
         ));
         let reversed = session.replace_range(3, 0, "x".to_string());
         assert!(matches!(reversed, Err(EditorError::InvalidRange { .. })));
