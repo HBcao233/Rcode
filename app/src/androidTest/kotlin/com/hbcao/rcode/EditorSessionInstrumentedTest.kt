@@ -2,9 +2,13 @@ package com.hbcao.rcode
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.hbcao.rcode.bridge.UniffiEditorSession
+import com.hbcao.rcode.editor.DocumentFormat
 import com.hbcao.rcode.editor.EditorInputHandler
+import com.hbcao.rcode.editor.LineEnding
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -64,6 +68,49 @@ class EditorSessionInstrumentedTest {
             assertEquals("first", viewport.lines[0].text)
             assertEquals("second", viewport.lines[1].text)
             assertEquals(1, session.cursor().line)
+        } finally {
+            session.close()
+        }
+    }
+
+    @Test
+    fun encodeMapsBomAndLineEndingAndKeepsTheVersion() {
+        val session = UniffiEditorSession()
+        try {
+            session.insertText("a\nb\n")
+            val version = session.version()
+
+            val lf = session.encode(DocumentFormat(bom = false, lineEnding = LineEnding.LF))
+            assertArrayEquals(
+                byteArrayOf('a'.code.toByte(), '\n'.code.toByte(), 'b'.code.toByte(), '\n'.code.toByte()),
+                lf.bytes,
+            )
+            assertEquals(version, lf.version)
+
+            val crlf = session.encode(DocumentFormat(bom = true, lineEnding = LineEnding.CRLF))
+            assertArrayEquals(
+                byteArrayOf(
+                    0xEF.toByte(),
+                    0xBB.toByte(),
+                    0xBF.toByte(),
+                    'a'.code.toByte(),
+                    '\r'.code.toByte(),
+                    '\n'.code.toByte(),
+                    'b'.code.toByte(),
+                    '\r'.code.toByte(),
+                    '\n'.code.toByte(),
+                ),
+                crlf.bytes,
+            )
+            assertEquals(version, crlf.version)
+
+            // Encoding is read-only and the version identifies the encoded text.
+            assertEquals(version, session.version())
+            assertEquals("a\nb\n", session.text())
+            session.insertText("later")
+            val afterEdit = session.encode(DocumentFormat(bom = false, lineEnding = LineEnding.LF))
+            assertTrue(afterEdit.version > crlf.version)
+            assertArrayEquals("a\nb\nlater".encodeToByteArray(), afterEdit.bytes)
         } finally {
             session.close()
         }

@@ -17,6 +17,19 @@ class FakeEditorSession(
 
     override fun text(): String = document
 
+    // Test fake: mirrors the Rust codec closely enough for the IME tests. Production
+    // encoding always goes through EditorSessionApi -> Rust (T-0010).
+    override fun encode(format: DocumentFormat): EncodedDocument {
+        val newline =
+            when (format.lineEnding) {
+                LineEnding.LF -> "\n"
+                LineEnding.CRLF -> "\r\n"
+            }
+        val body = document.replace("\n", newline).toByteArray()
+        val bytes = if (format.bom) UTF8_BOM + body else body
+        return EncodedDocument(version = documentVersion, bytes = bytes)
+    }
+
     override fun version(): Long = documentVersion
 
     override fun lineCount(): Int = lineStarts().size
@@ -174,5 +187,9 @@ class FakeEditorSession(
             index += width
         }
         return text.substring(0, index)
+    }
+
+    private companion object {
+        val UTF8_BOM = byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte())
     }
 }

@@ -1,13 +1,18 @@
 package com.hbcao.rcode.bridge
 
+import com.hbcao.rcode.editor.DocumentFormat
 import com.hbcao.rcode.editor.EditorCursorState
 import com.hbcao.rcode.editor.EditorLineSlice
 import com.hbcao.rcode.editor.EditorSessionApi
 import com.hbcao.rcode.editor.EditorViewportSnapshot
+import com.hbcao.rcode.editor.EncodedDocument
+import com.hbcao.rcode.editor.LineEnding
 import uniffi.rcode_ffi.EditorCursor
 import uniffi.rcode_ffi.EditorLine
 import uniffi.rcode_ffi.EditorSession
 import uniffi.rcode_ffi.EditorViewport
+import uniffi.rcode_ffi.DocumentFormat as NativeDocumentFormat
+import uniffi.rcode_ffi.LineEnding as NativeLineEnding
 
 /**
  * Production [EditorSessionApi] backed by the UniFFI-generated Rust session.
@@ -20,6 +25,11 @@ class UniffiEditorSession(
     private val native: EditorSession = EditorSession(),
 ) : EditorSessionApi {
     override fun text(): String = native.text()
+
+    override fun encode(format: DocumentFormat): EncodedDocument {
+        val encoded = native.encode(format.toNative())
+        return EncodedDocument(version = encoded.version.toLong(), bytes = encoded.bytes)
+    }
 
     override fun version(): Long = native.version().toLong()
 
@@ -71,6 +81,16 @@ class UniffiEditorSession(
     override fun close() {
         native.close()
     }
+
+    private fun DocumentFormat.toNative() =
+        NativeDocumentFormat(
+            bom = bom,
+            lineEnding =
+                when (lineEnding) {
+                    LineEnding.LF -> NativeLineEnding.LF
+                    LineEnding.CRLF -> NativeLineEnding.CR_LF
+                },
+        )
 
     private fun EditorCursor.toState() =
         EditorCursorState(

@@ -14,7 +14,6 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
 import com.hbcao.rcode.ui.theme.EditorColors
-import kotlin.math.roundToInt
 
 /**
  * Custom text editor view for M1.0.

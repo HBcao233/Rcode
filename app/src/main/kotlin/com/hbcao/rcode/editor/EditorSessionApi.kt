@@ -37,6 +37,17 @@ interface EditorSessionApi : AutoCloseable {
     /** Full document text. For tests and diagnostics only. */
     fun text(): String
 
+    /**
+     * Encodes the current text for saving with [format].
+     *
+     * The encoding happens in Rust (`rcode-fs::codec`), which owns BOM and newline
+     * restoration (`architecture.md` §3.2). Kotlin must not call [text] and encode the
+     * bytes itself: that would cache the full text as authoritative state (§3.1) and
+     * duplicate the codec. Run this off the UI thread (§3.4); the returned
+     * [EncodedDocument.version] identifies the text that was encoded.
+     */
+    fun encode(format: DocumentFormat): EncodedDocument
+
     /** Monotonic document version; changes on every text edit. */
     fun version(): Long
 
