@@ -67,11 +67,6 @@ class EditorView(
         isFocusableInTouchMode = true
         isClickable = true
         setBackgroundColor(colors.background)
-        val left = dp(8f).roundToInt()
-        val top = dp(0f).roundToInt()
-        val right = left
-        val bottom = top
-        setPadding(left, top, right, bottom)
     }
 
     // region IME / input path
