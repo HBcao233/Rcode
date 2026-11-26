@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/rcode-buffer", "crates/rcode-ffi"]
+members = ["crates/rcode-buffer", "crates/rcode-ffi", "crates/rcode-fs"]
 
 [workspace.package]
 version = "0.1.0"

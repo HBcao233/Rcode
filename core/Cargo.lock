@@ -662,6 +662,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rcode-fs"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "proptest",
+ "thiserror",
+]
+
+[[package]]
 name = "regex"
 version = "1.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
