@@ -1,10 +1,17 @@
 package com.hbcao.rcode.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
@@ -28,9 +35,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hbcao.rcode.R
@@ -43,8 +50,16 @@ import com.hbcao.rcode.icons.FileDownload
 import com.hbcao.rcode.icons.FolderOpen
 import com.hbcao.rcode.icons.Help
 import com.hbcao.rcode.icons.History
+import com.hbcao.rcode.icons.KeyboardArrowDown
+import com.hbcao.rcode.icons.KeyboardArrowLeft
+import com.hbcao.rcode.icons.KeyboardArrowRight
+import com.hbcao.rcode.icons.KeyboardArrowUp
+import com.hbcao.rcode.icons.KeyboardTab
+import com.hbcao.rcode.icons.MoreHoriz
+import com.hbcao.rcode.icons.Redo
 import com.hbcao.rcode.icons.Save
 import com.hbcao.rcode.icons.Terminal2
+import com.hbcao.rcode.icons.Undo
 import com.hbcao.rcode.state.MainUiState
 import com.hbcao.rcode.state.MainViewModel
 import com.hbcao.rcode.ui.theme.EditorColors
@@ -102,6 +117,17 @@ fun MainScreen(viewModel: MainViewModel) {
                 },
             )
         },
+        bottomBar = {
+            BottomActionBar(
+                row1Items = remember { provideRow1Items() },
+                row2Items = remember { provideRow2Items() },
+                modifier =
+                    Modifier
+                        .navigationBarsPadding() // 避让导航栏
+                        .imePadding(),
+                // 输入法避让
+            )
+        },
     ) { innerPadding ->
         AndroidView(
             factory = { context -> EditorView(context, viewModel.editorSession, editorColors) },
@@ -122,7 +148,7 @@ private fun coreStatusText(state: MainUiState): String =
 private fun editorColors(): EditorColors {
     val scheme = MaterialTheme.colorScheme
     return EditorColors(
-        background = Color(242, 241, 247).toArgb(),
+        background = scheme.surfaceContainer.toArgb(), // rgb(243, 237, 247)
         text = scheme.onBackground.toArgb(), // rgb(29, 27, 32)
         caret = scheme.primary.toArgb(), // rgb(103, 80, 164)
         composingUnderline = scheme.primary.toArgb(), // rgb(103, 80, 164)
@@ -218,5 +244,168 @@ private fun MoreMenuButton() {
             onClick = { showMenu = false },
             trailingIcon = { Icon(ExitToApp, contentDescription = null) },
         )
+    }
+}
+
+// 数据模型，后续可从设置/ViewModel 动态提供
+data class ActionItem(
+    val id: String,
+    val icon: @Composable () -> Unit,
+    val onClick: () -> Unit,
+)
+
+private fun provideRow1Items(): List<ActionItem> =
+    listOf(
+        ActionItem(
+            id = "row1_0",
+            icon = {
+                Text(
+                    text = "CTRL",
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                )
+            },
+            onClick = {},
+        ),
+        ActionItem(
+            id = "row1_1",
+            icon = {
+                Icon(KeyboardTab, contentDescription = "Tab")
+            },
+            onClick = {},
+        ),
+        ActionItem(
+            id = "row1_2",
+            icon = {
+                Text(text = "SHFT", style = MaterialTheme.typography.labelSmall, maxLines = 1)
+            },
+            onClick = {},
+        ),
+        ActionItem(
+            id = "row1_3",
+            icon = {
+                Icon(Undo, contentDescription = "Undo")
+            },
+            onClick = {},
+        ),
+        ActionItem(
+            id = "row1_4",
+            icon = {
+                Icon(Redo, contentDescription = "Redo")
+            },
+            onClick = {},
+        ),
+        ActionItem(
+            id = "row1_5",
+            icon = {
+                Icon(Icons.Filled.Search, contentDescription = "Search")
+            },
+            onClick = {},
+        ),
+        ActionItem(
+            id = "row1_6",
+            icon = {
+                Icon(Save, contentDescription = "Save")
+            },
+            onClick = {},
+        ),
+        ActionItem(
+            id = "row1_7",
+            icon = {
+                Icon(MoreHoriz, contentDescription = "More")
+            },
+            onClick = {},
+        ),
+    )
+
+private fun provideRow2Items(): List<ActionItem> =
+    listOf(
+        ActionItem(
+            id = "row2_0",
+            icon = {
+                Icon(KeyboardArrowLeft, contentDescription = "Left")
+            },
+            onClick = {},
+        ),
+        ActionItem(
+            id = "row2_1",
+            icon = {
+                Icon(KeyboardArrowRight, contentDescription = "Right")
+            },
+            onClick = {},
+        ),
+        ActionItem(
+            id = "row2_2",
+            icon = {
+                Icon(KeyboardArrowUp, contentDescription = "Up")
+            },
+            onClick = {},
+        ),
+        ActionItem(
+            id = "row2_3",
+            icon = {
+                Icon(KeyboardArrowDown, contentDescription = "Down")
+            },
+            onClick = {},
+        ),
+        ActionItem(
+            id = "row2_4",
+            icon = { Text(text = "{", style = MaterialTheme.typography.labelSmall, maxLines = 1) },
+            onClick = {},
+        ),
+        ActionItem(
+            id = "row2_5",
+            icon = { Text(text = "}", style = MaterialTheme.typography.labelSmall, maxLines = 1) },
+            onClick = {},
+        ),
+        ActionItem(
+            id = "row2_6",
+            icon = { Text(text = "[", style = MaterialTheme.typography.labelSmall, maxLines = 1) },
+            onClick = {},
+        ),
+        ActionItem(
+            id = "row2_7",
+            icon = { Text(text = "]", style = MaterialTheme.typography.labelSmall, maxLines = 1) },
+            onClick = {},
+        ),
+    )
+
+@Composable
+private fun BottomActionBar(
+    row1Items: List<ActionItem>,
+    row2Items: List<ActionItem>,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surfaceContainerLowest),
+    ) {
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            items(row1Items) { item ->
+                IconButton(
+                    onClick = item.onClick,
+                    modifier = Modifier.fillParentMaxWidth(1f / 8f).height(36.dp),
+                ) {
+                    item.icon()
+                }
+            }
+        }
+
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            items(row2Items) { item ->
+                IconButton(
+                    onClick = item.onClick,
+                    modifier = Modifier.fillParentMaxWidth(1f / 8f).height(36.dp),
+                ) {
+                    item.icon()
+                }
+            }
+        }
     }
 }
