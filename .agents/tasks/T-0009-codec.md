@@ -161,7 +161,7 @@ cargo bench -p rcode-fs                   # V8
 ### 2026-12-02（实现者：pi agent）
 
 - 状态：**Review**（代码、测试、文档完成，等待审查）。
-- 分支与提交：`feat/m1-codec`；提交见 `git log --oneline feat/m1-codec`（3 个提交，见“计划”）。
+- 分支与提交：`feat/m1-codec`；`efa191e`（`rcode-ffi` 测试修复）、`99aa4e0`（crate 与测试/基准）、`2b02e76` 及其后续 `docs` 提交（architecture / glossary / CHANGELOG / 任务单 / backlog）。
 - 已完成：
   - 新建 `core/crates/rcode-fs`（`codec` 模块）：`decode`、`DecodedText`、`DocumentFormat`、`LineEnding`、`encode`、`encode_into`、`CodecError`、`UnsupportedKind`。除 `thiserror` 外无新增依赖；库代码无 `unsafe`/`unwrap`/`expect`/`panic!`。
   - 23 个单元测试 + 3 × 1000 用例属性测试（`tests/prop_codec.rs`，失败种子路径已登记）。

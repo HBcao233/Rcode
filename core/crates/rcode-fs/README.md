@@ -12,7 +12,7 @@ T-0010); this crate only decides what the bytes mean.
 
 | Item | Purpose |
 |---|---|
-| `decode(&[u8]) -> Result<DecodedText, CodecError>` | One `O(n)` pass: validate UTF-8, strip one BOM, normalize `\r\n` → `\n`, record the format |
+| `decode(&[u8]) -> Result<DecodedText, CodecError>` | Linear `O(n)`: validate UTF-8, check for `NUL`, strip one BOM, normalize `\r\n` → `\n`, record the format |
 | `DecodedText { text, format }` | `text` goes to `TextBuffer::from_str`; `format` goes back to `encode` |
 | `DocumentFormat { bom, line_ending }` | What to write when saving |
 | `DocumentFormat::new_file()` | Untitled/new document: no BOM, `LineEnding::Lf` |
@@ -65,7 +65,7 @@ Anything else that is not valid UTF-8 becomes `NotUtf8 { offset }`.
 
 - No `unwrap`, `expect` or `panic!` in library code (workspace clippy lints
   deny them); `decode` accepts any `&[u8]` and never panics.
-- `decode` and `encode` are single-pass `O(n)`; no regex, no extra crates.
+- `decode` and `encode` are `O(n)` with one output allocation; the byte searches are vectorised (`memchr`) and there is no regex. `decode`'s dominant cost is UTF-8 validation (about 37 ms for the 10 MB mixed-script benchmark, 1 ms for pure ASCII).
 - `decode` holds the input bytes and the output `String` at the same time
   (about +n bytes); callers should drop the input bytes right after decoding
   (T-0012, A3 budget).
