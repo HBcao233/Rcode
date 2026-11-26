@@ -39,8 +39,9 @@
   - 验收：A4 中的 proptest 通过（≥1000 用例）；公开 API 带单位说明的 `///` 文档；无 `unwrap`/`expect`。
   - 相关 skill：rust-core、testing-qa
 
-- [ ] **T-0009 编码与换行检测（codec）**
-  - 类型：feat ｜ 模块：fs / codec ｜ 依赖：Q1、Q2
+- [ ] **T-0009 编码与换行检测（codec）** — Ready（任务单已撰写；开工前需确认 Q-T9-1～Q-T9-5）
+  - 任务单 `T-0009-codec.md`
+  - 类型：feat ｜ 模块：codec（建议新建 `core/crates/rcode-codec`，见 Q-T9-1）｜ 依赖：Q1、Q2
   - 范围：检测 UTF-8 BOM、LF/CRLF（混合换行的策略需同时记录）；按原样保留换行与 BOM 的解码/编码。
   - 验收：A6 中 Rust 侧 fixture 往返字节一致（UTF-8、UTF-8 BOM、LF、CRLF、混合换行各一份）；非 UTF-8 输入按 Q1 结果处理。
   - 相关 skill：rust-core、testing-qa
@@ -69,11 +70,10 @@
   - 范围：自定义 Canvas 只绘制可见行；行布局缓存按版本号失效；视口 + 预取一屏。
   - 验收：10 MB 文件可滚动；A1 首屏 < 500 ms 的初版测量结果已记录。
   - 相关 skill：editor-rendering、perf-benchmark
-- [ ] **T-0015 光标与选区（触摸）**（依赖 T-0014）
-  - 验收：单击定位光标、长按选词、拖动选区；光标位置由 Rust 返回的字符偏移决定。
-- [ ] **T-0016 IME 输入（InputConnection）**（依赖 T-0015）
-  - 验收：中文输入法可提交文本；组合文本（composing）正确显示；删除与回车正常。
-  - 相关 skill：editor-rendering、kotlin-compose-ui
+- [ ] **T-0015 光标（触摸）**（依赖 T-0014）
+  - 验收：单击定位光标；光标位置由 Rust 返回的字符偏移决定。
+- [ ] **T-0016 选区**（依赖 T-0015）
+  - 验收：长按选词、拖动选区
 
 ### 语法高亮
 - [ ] **T-0017 高亮框架与 JSON/Rust 首批 grammar**（依赖 Q11、Q13）
