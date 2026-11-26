@@ -27,3 +27,5 @@
 | 主导换行符（dominant line ending） | 文档中占比最多的换行形式，并列时取最先出现的形式；无换行时为 LF。混合换行的文件保存时统一为它（Q-T9-2） |
 | DocumentFormat | codec 输出的保存格式：是否带 BOM + 单一换行形式；新建文件为无 BOM + LF |
 | Macrobenchmark | Jetpack 提供的启动与滚动性能测试库 |
+| 失败原子性（failure atomicity） | 一次操作要么完全成功，要么保持操作前的状态。Rcode 的保存只对可捕获的 I/O/校验失败保证它（A7）：失败后原文件字节不变；进程被杀死导致的磁盘不一致不在保证范围（Q-T10-2） |
+| 保存事务（save transaction） | `AtomicDocumentSaver` 的保存流程：写应用私有临时文件 → 备份原文件 → 截断覆盖 → 回读校验 → 失败时用备份回滚。用 `Mutex` 串行化，事务主体在 `NonCancellable` 中执行 |

@@ -3,9 +3,9 @@
 - **ID**：T-0010
 - **里程碑**：M1（A6、A7；G4；T-0013 保存 UI 的前置）
 - **类型**：feat
-- **状态**：Ready
-- **分支**：`feat/m1-atomic-save`（领取时创建）
-- **负责人**：（未领取）
+- **状态**：Review
+- **分支**：`feat/m1-atomic-save`
+- **负责人**：agent（session `01a21779`，2026-11-26 领取）
 - **涉及模块**：fs（复用 `rcode-fs::codec`）、ffi（`rcode-ffi::EditorSession`）、platform（新建 `app/src/main/kotlin/com/hbcao/rcode/platform/document`）、bridge、editor API
 - **相关 skill**：rust-core、uniffi-bridge、android-build、testing-qa（本任务不涉及编辑器渲染，不需要 editor-rendering、kotlin-compose-ui）
 
@@ -183,18 +183,18 @@ M1 承诺“打开/保存文本文件（UTF-8，自动检测 BOM 和换行符 LF
 
 ## 验收标准
 
-- [ ] **V1** `EditorSession::encode(format)` 与 `DocumentFormat`/`LineEnding`/`EncodedDocument` 已导出；UniFFI 绑定由 `scripts/build-core.sh` 生成，未手改；`cargo doc -p rcode-ffi --no-deps` 无警告。
-- [ ] **V2** Rust 单元测试覆盖“空文档 / BOM / CRLF / 版本对应 / 不改变状态”，全部通过。
-- [ ] **V3（A6 Rust 侧）** T-0009 的 12 组 fixture 经 `decode → insert_text → encode` 后字节完全一致；混合换行按 Q-T9-2 不在往返清单内。
-- [ ] **V4** Kotlin `EditorSessionApi.encode` 与 `UniffiEditorSession` 映射正确；仪器测试验证 LF / CRLF / BOM 与 `version`，不缓存全文。
-- [ ] **V5** `AtomicDocumentSaver` 成功路径：原文件字节等于 `bytes`，临时文件与备份已删除；空字节保存为 0 字节。
-- [ ] **V6（A7）** 注入失败（临时写、备份读、覆盖写、回读校验）后，原文件字节与保存前完全一致；返回结构化 `Failure`，不吞异常。
-- [ ] **V7** 恢复失败时 `originalPreserved = false`，备份文件保留且内容为原字节；错误携带路径，不删除唯一副本。
-- [ ] **V8** 保存事务使用 `NonCancellable` + `Mutex`；取消不会在覆盖中途留下未回滚的原文件；并发保存串行化（JVM 测试）。
-- [ ] **V9** 仪器测试 A7 在真机/模拟器上通过；若本会话无设备，代码与 `compileDebugAndroidTestKotlin` 通过，并在交接记录中明确“未运行”及原因。
-- [ ] **V10** 10 MB 文档保存实测耗时与缓存目录峰值已记录（不做硬门槛）；保存不在 UI 线程执行。
-- [ ] **V11** DoD（`conventions.md` §7）本机可完成部分全部满足：fmt / clippy / test / ktlint / lint / 单元测试 / assembleDebug / CHANGELOG / 任务单 / backlog。本任务不涉及 UI，不需要截图。
-- [ ] **V12** 未新增外部依赖、未修改 Manifest 权限、未新增 ADR；`git diff` 只包含本任务列出的文件（含 `core/Cargo.lock` 的路径依赖更新）。
+- [x] **V1** `EditorSession::encode(format)` 与 `DocumentFormat`/`LineEnding`/`EncodedDocument` 已导出；UniFFI 绑定由 `scripts/build-core.sh` 生成，未手改；`cargo doc -p rcode-ffi --no-deps` 无警告。
+- [x] **V2** Rust 单元测试覆盖“空文档 / BOM / CRLF / 版本对应 / 不改变状态”，全部通过。
+- [x] **V3（A6 Rust 侧）** T-0009 的 12 组 fixture 经 `decode → insert_text → encode` 后字节完全一致；混合换行按 Q-T9-2 不在往返清单内。
+- [ ] **V4** Kotlin `EditorSessionApi.encode` 与 `UniffiEditorSession` 映射正确；仪器测试验证 LF / CRLF / BOM 与 `version`，不缓存全文。 → 映射与仪器测试已写好并编译通过；本会话无设备，测试**未运行**（见 V9 与交接记录）。
+- [x] **V5** `AtomicDocumentSaver` 成功路径：原文件字节等于 `bytes`，临时文件与备份已删除；空字节保存为 0 字节。
+- [x] **V6（A7）** 注入失败（临时写、备份读、覆盖写、回读校验）后，原文件字节与保存前完全一致；返回结构化 `Failure`，不吞异常。
+- [x] **V7** 恢复失败时 `originalPreserved = false`，备份文件保留且内容为原字节；错误携带路径，不删除唯一副本。
+- [x] **V8** 保存事务使用 `NonCancellable` + `Mutex`；取消不会在覆盖中途留下未回滚的原文件；并发保存串行化（JVM 测试）。
+- [x] **V9** 仪器测试 A7 在真机/模拟器上通过；若本会话无设备，代码与 `compileDebugAndroidTestKotlin` 通过，并在交接记录中明确“未运行”及原因。 → 本会话 `adb devices` 为空，按无设备条款处理。
+- [x] **V10** 10 MB 文档保存实测耗时与缓存目录峰值已记录（不做硬门槛）；保存不在 UI 线程执行。
+- [x] **V11** DoD（`conventions.md` §7）本机可完成部分全部满足：fmt / clippy / test / ktlint / lint / 单元测试 / assembleDebug / CHANGELOG / 任务单 / backlog。本任务不涉及 UI，不需要截图。
+- [x] **V12** 未新增外部依赖、未修改 Manifest 权限、未新增 ADR；`git diff` 只包含本任务列出的文件（含 `core/Cargo.lock` 的路径依赖更新）。 → 额外包含 `EditorView.kt` 的一行未使用 import 删除（见交接记录）。
 
 ## 计划
 
@@ -247,11 +247,37 @@ bash ./scripts/build-core.sh          # 重新生成 Kotlin 绑定
 
 - （无）
 
+## 领取记录
+
+- 2026-11-26 领取。基线验证：`cargo fmt --all -- --check` 通过；`cargo test --workspace` 通过；`./gradlew :app:testDebugUnitTest` 通过（BUILD SUCCESSFUL）。
+- Q-T10-1 已由人类在领取指令中确认，按“应用私有临时文件 + 原文件备份 + 覆盖 + 回读校验 + 回滚”实现。
+
 ## 交接记录
 
-- 日期：
-- 分支与提交：
+- 日期：2026-11-26
+- 分支与提交：`feat/m1-atomic-save`；`2b524f4 feat(ffi): encode document bytes with the saved format`、`1f0205f feat(platform): add transactional document saver`（本任务单与 CHANGELOG 在随后的 docs 提交中）。
 - 已完成：
+  - Rust：`EditorSession::encode(format)`，`DocumentFormat`/`LineEnding`/`EncodedDocument`，`rcode-fs` path 依赖；Rust 测试（V1–V3）。
+  - Kotlin：`editor/DocumentFormat.kt`、`editor/EncodedDocument.kt`、`EditorSessionApi.encode`、`UniffiEditorSession` 映射、`platform/document/{SavableDocument,ContentResolverDocument,AtomicDocumentSaver,SaveResult}.kt`；JVM 与仪器测试代码（V5–V8）。
+  - 文档：`architecture.md` §3.2/§3.6、`core/crates/rcode-fs/README.md`、`CHANGELOG.md`、`glossary.md`、本任务单与 backlog。
 - 未完成：
+  - **V4 的仪器测试未运行**：本会话 `adb devices` 为空（无真机/模拟器），仅验证 `:app:compileDebugAndroidTestKotlin` 通过。需要在有设备时运行 `./gradlew :app:connectedDebugAndroidTest`。
+  - UI 接线（保存按钮、`format` getter 调用、保存成功后 `session.version() != encoded.version` 的脏判断）属于 T-0011/T-0013。
 - 测试结果：
+  - `cd core && cargo fmt --all -- --check`：通过。
+  - `cd core && cargo clippy --workspace --all-targets -- -D warnings`：通过。
+  - `cd core && cargo test --workspace`：通过（rcode-buffer 12 + prop 1；rcode-ffi 21；rcode-fs 23 + prop 3）。
+  - `cd core && cargo doc -p rcode-ffi --no-deps`：通过，无警告。
+  - `bash ./scripts/build-core.sh`：通过（arm64-v8a `.so` 与 Kotlin 绑定重新生成）。
+  - `./gradlew :app:ktlintCheck :app:lintDebug :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug --offline`：BUILD SUCCESSFUL。
+  - `AtomicDocumentSaverTest`：10 tests, 0 failures（成功、临时目录失败、备份读失败、覆盖写失败、校验不一致、恢复失败、空字节、并发、取消、10 MB 实测）。
+  - 10 MB 实测（Termux 主机 JVM，真实临时目录）：保存 210–236 ms，`cacheDir/save` 峰值 20 MB（新字节 + 原文件备份）；Rust `codec` 编码 10 MB：LF 5.6 ms、BOM+CRLF 19.1 ms（`cargo bench -p rcode-fs`，release）；未运行 Macrobenchmark。
+  - 仪器测试：**未运行**（无设备）；`compileDebugAndroidTestKotlin` 通过。
+- 备注：
+  - 修复了 `main` 上已存在的 ktlint 失败：`EditorView.kt` 的未使用 `kotlin.math.roundToInt` import。它阻塞 DoD，属一行修正，已在 CHANGELOG 记录。
+  - 未新增外部依赖（`rcode-fs` 是 workspace path 依赖）；未改 Manifest、签名、包名；未新增 ADR。
 - 下一步建议：
+  1. 在有设备的环境运行 `./gradlew :app:connectedDebugAndroidTest`，确认 `EditorSessionInstrumentedTest.encodeMapsBomAndLineEndingAndKeepsTheVersion` 与 `AtomicDocumentSaverInstrumentedTest` 三个用例。
+  2. T-0013 在 `MainViewModel` 或保存用例中持有**单个** `AtomicDocumentSaver` 实例；先 `withContext(Dispatchers.Default) { session.encode(format) }`，再 `save(document, encoded.bytes)`；失败时展示 `SaveResult.Failure.stage`，`originalPreserved == false` 时展示 `backupPath`。
+  3. T-0011 提供 `DocumentFormat` getter 后，T-0013 把它传给 `encode`；不要用 `session.text()` 编码。
+  4. 审查重点：`AtomicDocumentSaver.saveTransaction` 的清理路径（`keepBackup`）、`ContentResolverDocument.openWrite` 的 `"wt"` 错误映射。

@@ -57,7 +57,7 @@
   - 验收：A6 中 Rust 侧 fixture 往返字节一致（UTF-8、UTF-8 BOM、LF、CRLF、CJK/emoji、空文件等 12 组）；混合换行文件按 Q-T9-2 统一为 dominant。
   - 相关 skill：rust-core、testing-qa
 
-- [ ] **T-0010 原子保存（失败原子性）** — Ready（任务单 `T-0010-atomic-save.md`，待领取；领取前请确认 Q-T10-1 的保证边界）
+- [x] **T-0010 原子保存（失败原子性）** — Review（`feat/m1-atomic-save`；`2b524f4` + `1f0205f`；JVM/DoD 通过，V4 仪器测试待有设备时运行）
   - 类型：feat ｜ 模块：fs、ffi、platform ｜ 依赖：T-0009
   - 范围：Rust `EditorSession.encode(format)` 生成字节；Kotlin 写应用私有临时文件 + 原文件备份，覆盖后回读校验，失败回滚。
   - 验收：A7 注入失败测试通过（原文件字节不变）；A6 Rust 侧 `decode → session → encode` 往返一致；端到端 A6/A7 见 T-0013。

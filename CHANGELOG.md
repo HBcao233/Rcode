@@ -49,3 +49,29 @@ All notable changes are documented here. Format follows Keep a Changelog.
 - Fixed: two stale assertions in `rcode-ffi`'s `EditorSession` tests referred to
   error variants that the previous commit removed/renamed (`InvalidOffset`,
   `InvalidRange` for an out-of-bounds range), which had left `cargo test` red.
+
+### T-0010 (atomic save)
+- Added `EditorSession::encode(format)` and the FFI records `DocumentFormat`
+  (`bom`, `line_ending`), `LineEnding` and `EncodedDocument { version, bytes }`.
+  Encoding runs in Rust through `rcode-fs::codec::encode_into`; the text snapshot
+  and the version are taken under one lock, and the method does not change text,
+  caret or version. Twelve codec fixtures round-trip through
+  `decode -> insert_text -> encode` byte for byte (A6, Rust side).
+- Added `platform/document`: `SavableDocument`, `ContentResolverDocument`,
+  `AtomicDocumentSaver` and `SaveResult`/`SaveStage`. Saving writes the new bytes
+  to `cacheDir/save/new-*.tmp`, copies the original to `old-*.tmp`, overwrites the
+  document with `"wt"`, reads it back and compares it byte for byte; any catchable
+  failure restores the backup. Transactions are serialized per saver (`Mutex`) and
+  run under `NonCancellable`, so cancelling the coroutine cannot stop a rollback.
+- Guarantee boundary (Q-T10-1, Q-T10-2): **failure atomicity only**. After a
+  catchable I/O or verification failure the document still has its pre-save bytes
+  (A7); a failed restore reports `originalPreserved = false` and keeps the backup.
+  If the process is killed between truncating the document and finishing the
+  rollback, the file can be incomplete. No save reports success in that case, and
+  the draft mechanism (T-0022/T-0023, G4) remains the recovery path. Disk-level
+  crash recovery is left to an M2 evaluation.
+- Added JVM tests for the success path, four injected failure points, a failed
+  restore, empty bytes, concurrent saves and cancellation, plus instrumented tests
+  for FFI encoding and A7 through `ContentResolverDocument`.
+- Fixed: an unused `kotlin.math.roundToInt` import in `EditorView` that had left
+  `ktlintCheck` red (pre-existing on `main`, not introduced by this task).
