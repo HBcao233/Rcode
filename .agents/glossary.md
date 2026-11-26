@@ -21,4 +21,9 @@
 | Skill | 给 agent 使用的专项指令包，位于 `skills/` 下 |
 | LSP | Language Server Protocol，语言服务协议 |
 | tree-sitter | 增量解析库，用于语法高亮和结构分析 |
+| BOM（byte order mark） | 文件开头的字节序列，标识编码。UTF-8 的 BOM 为 `EF BB BF`（U+FEFF）。codec 只剥掉开头的这一处，并在保存时写回；文本中间的 U+FEFF 是普通字符 |
+| CRLF | `\r\n` 两个字节组成的换行（Windows 风格）。与 LF（`\n`）同属 M1 支持的换行形式；缓冲区内部只存 `\n` |
+| 归一化（newline normalization） | 解码时把 `\r\n` 改写为 `\n`，使缓冲区只面对一种换行；它只删除 `\r\n` 对中的 `\r`，因此单独的 `\r` 仍是内容，保存时可无损还原 |
+| 主导换行符（dominant line ending） | 文档中占比最多的换行形式，并列时取最先出现的形式；无换行时为 LF。混合换行的文件保存时统一为它（Q-T9-2） |
+| DocumentFormat | codec 输出的保存格式：是否带 BOM + 单一换行形式；新建文件为无 BOM + LF |
 | Macrobenchmark | Jetpack 提供的启动与滚动性能测试库 |

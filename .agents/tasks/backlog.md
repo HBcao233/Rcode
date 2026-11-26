@@ -39,11 +39,11 @@
   - 验收：A4 中的 proptest 通过（≥1000 用例）；公开 API 带单位说明的 `///` 文档；无 `unwrap`/`expect`。
   - 相关 skill：rust-core、testing-qa
 
-- [ ] **T-0009 编码与换行检测（codec）** — Ready（任务单已撰写；开工前需确认 Q-T9-1～Q-T9-5）
+- [x] **T-0009 编码与换行检测（codec）** — Review（`feat/m1-codec`；自动化检查通过，V8 的 CRLF decode 51 ms 待人类确认）
   - 任务单 `T-0009-codec.md`
-  - 类型：feat ｜ 模块：codec（建议新建 `core/crates/rcode-codec`，见 Q-T9-1）｜ 依赖：Q1、Q2
-  - 范围：检测 UTF-8 BOM、LF/CRLF（混合换行的策略需同时记录）；按原样保留换行与 BOM 的解码/编码。
-  - 验收：A6 中 Rust 侧 fixture 往返字节一致（UTF-8、UTF-8 BOM、LF、CRLF、混合换行各一份）；非 UTF-8 输入按 Q1 结果处理。
+  - 类型：feat ｜ 模块：fs（新建 `core/crates/rcode-fs` 的 `codec` 模块，Q-T9-1）｜ 依赖：Q1、Q2
+  - 范围：检测 UTF-8 BOM、LF/CRLF；按记录的文件格式还原 BOM 与换行；非 UTF-8（含 UTF-16/32 BOM、NUL）拒绝打开。
+  - 验收：A6 中 Rust 侧 fixture 往返字节一致（UTF-8、UTF-8 BOM、LF、CRLF、CJK/emoji、空文件等 12 组）；混合换行文件按 Q-T9-2 统一为 dominant。
   - 相关 skill：rust-core、testing-qa
 
 ## Backlog
