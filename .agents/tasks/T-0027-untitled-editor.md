@@ -69,9 +69,14 @@ uniffi-bridge、editor-rendering、kotlin-compose-ui、testing-qa
 - 手动验证：A0.1 / A0.2 / A0.3，记录输入法名称与设备型号
 - 基准：M1.0 不新增基准；FFI 调用耗时在 T-0014/T-0025 统一测量
 
-## 待确认
+## 已确认
 
-- 无。Q16、Q17、Q18 已确认。
+- [x] **Q16 M1.0 输入法实现方案**：
+  - 编辑器视图的 IME 接入方式。(a): 自定义 `View` 实现 `onCreateInputConnection`，用 `AndroidView` 嵌入 Compose； (b) 纯 Compose，依赖 `BasicTextField` 或平台 `TextInputService`，自定义绘制受限。**选择: (a)**，记录于 ADR-0002。
+- [x] **Q17 M1.0 临时缓冲实现**：
+  - M1.0 的 Rust 侧文本是否使用 `String` 临时实现（T-0027），待 T-0007 rope 完成后替换。避免 M1.0 等待完整 buffer。
+- [x] **Q18 M1.0 数据丢失**：
+  - M1.0 中未保存的 untitled 内容在进程被杀后丢失，直到草稿功能（T-0022）完成。是否接受这一中间状态。
 
 ## 阻塞
 

@@ -3,9 +3,9 @@
 - **ID**：T-0009
 - **里程碑**：M1（A6；T-0010 原子保存、T-0012 SAF 打开的前置）
 - **类型**：feat
-- **状态**：Review
+- **状态**：Reviewed
 - **分支**：`feat/m1-codec`
-- **负责人**：agent（pi 会话，2026-12-02 领取）
+- **负责人**：deepseek-v4p1-flash-1017（pi 会话，2026-11-26 领取）
 - **涉及模块**：fs（新建 `core/crates/rcode-fs`，含 `codec` 模块）；不改 FFI，不改 Kotlin
 - **相关 skill**：rust-core、testing-qa、perf-benchmark（10 MB 编解码耗时）。不需要 uniffi-bridge（本任务不动 FFI）、editor-rendering
 
