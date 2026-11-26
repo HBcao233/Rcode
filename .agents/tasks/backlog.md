@@ -57,6 +57,12 @@
   - 验收：A6 中 Rust 侧 fixture 往返字节一致（UTF-8、UTF-8 BOM、LF、CRLF、CJK/emoji、空文件等 12 组）；混合换行文件按 Q-T9-2 统一为 dominant。
   - 相关 skill：rust-core、testing-qa
 
+- [ ] **T-0010 原子保存（失败原子性）** — Ready（任务单 `T-0010-atomic-save.md`，待领取；领取前请确认 Q-T10-1 的保证边界）
+  - 类型：feat ｜ 模块：fs、ffi、platform ｜ 依赖：T-0009
+  - 范围：Rust `EditorSession.encode(format)` 生成字节；Kotlin 写应用私有临时文件 + 原文件备份，覆盖后回读校验，失败回滚。
+  - 验收：A7 注入失败测试通过（原文件字节不变）；A6 Rust 侧 `decode → session → encode` 往返一致；端到端 A6/A7 见 T-0013。
+  - 相关 skill：rust-core、uniffi-bridge、android-build、testing-qa
+
 ## Backlog
 
 ### 缓冲区与会话
@@ -71,10 +77,10 @@
 - [ ] **T-0012 SAF 打开文件**（依赖 T-0009、T-0011、Q14）
   - 范围：Kotlin 通过 SAF 选择并读取 URI 字节，交给 Rust 解码；错误映射为 UI 状态。
   - 验收：选择文件后可进入编辑；读取失败有可见错误提示；不吞异常。
-- [ ] **T-0010 原子保存**（依赖 T-0009）
-  - 范围：Rust 生成字节，Kotlin 写入 SAF 临时文件后替换；失败时原文件不变。
-  - 验收：A7 注入失败测试通过（原文件字节不变）；A6 往返一致。
-  - 相关 skill：rust-core、android-build
+
+### 保存（端到端）
+- [ ] **T-0013 保存流程接入 UI**（依赖 T-0010、T-0012）
+  - 验收：保存按钮与快捷路径可用；保存成功/失败有反馈；A6、A7 的仪器测试通过。
 
 ### 编辑器视图
 - [ ] **T-0014 Canvas 可见行渲染**（依赖 T-0011、T-0012）
@@ -118,10 +124,6 @@
   - 相关 skill：perf-benchmark
 - [ ] **T-0026 Rust 覆盖率门禁**（依赖 Q12）
   - 验收：buffer / codec / syntax 覆盖率 ≥ 80%（A11）；CI 中以报告形式输出。
-
-### 保存（端到端）
-- [ ] **T-0013 保存流程接入 UI**（依赖 T-0010、T-0012）
-  - 验收：保存按钮与快捷路径可用；保存成功/失败有反馈；A6、A7 的仪器测试通过。
 
 ## 已完成
 
