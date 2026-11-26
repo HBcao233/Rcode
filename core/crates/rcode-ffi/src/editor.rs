@@ -11,6 +11,7 @@
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use rcode_buffer::{BufferError, TextBuffer};
+use rcode_fs::codec;
 
 /// Upper bound for one viewport request, so a bad caller cannot allocate without limit.
 const MAX_VIEWPORT_LINES: u32 = 10_000;
@@ -113,6 +114,78 @@ pub struct EditorViewport {
     pub cursor: EditorCursor,
 }
 
+/// Line ending to write for every `\n` of the buffer text.
+///
+/// FFI mirror of [`rcode_fs::codec::LineEnding`]; M1 supports only these two forms.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum LineEnding {
+    /// `\n` (U+000A).
+    Lf,
+    /// `\r\n` (U+000D U+000A).
+    CrLf,
+}
+
+impl From<LineEnding> for codec::LineEnding {
+    fn from(line_ending: LineEnding) -> Self {
+        match line_ending {
+            LineEnding::Lf => codec::LineEnding::Lf,
+            LineEnding::CrLf => codec::LineEnding::CrLf,
+        }
+    }
+}
+
+impl From<codec::LineEnding> for LineEnding {
+    fn from(line_ending: codec::LineEnding) -> Self {
+        match line_ending {
+            codec::LineEnding::Lf => LineEnding::Lf,
+            codec::LineEnding::CrLf => LineEnding::CrLf,
+        }
+    }
+}
+
+/// How a file is written back: whether to write a BOM and which line ending to use.
+///
+/// FFI mirror of [`rcode_fs::codec::DocumentFormat`], filled in by `codec::decode`
+/// when opening a file (T-0012) and passed to [`EditorSession::encode`] when saving.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Record)]
+pub struct DocumentFormat {
+    /// `true` when the file started with a UTF-8 BOM that must be written back.
+    pub bom: bool,
+    /// Form written for every `\n` of the buffer text.
+    pub line_ending: LineEnding,
+}
+
+impl From<DocumentFormat> for codec::DocumentFormat {
+    fn from(format: DocumentFormat) -> Self {
+        Self {
+            bom: format.bom,
+            line_ending: format.line_ending.into(),
+        }
+    }
+}
+
+impl From<codec::DocumentFormat> for DocumentFormat {
+    fn from(format: codec::DocumentFormat) -> Self {
+        Self {
+            bom: format.bom,
+            line_ending: format.line_ending.into(),
+        }
+    }
+}
+
+/// The bytes of one save plus the document version they encode.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct EncodedDocument {
+    /// Version of the text that was encoded.
+    ///
+    /// Text edits after this call do not appear in [`Self::bytes`]. A saver compares
+    /// it with [`EditorSession::version`] to tell whether the document changed
+    /// while saving.
+    pub version: u64,
+    /// File contents: BOM (when requested) and the text with its line ending.
+    pub bytes: Vec<u8>,
+}
+
 /// One editing session for a single document. Thread-safe; created from Kotlin as
 /// `EditorSession()`, which starts with an empty `untitled.txt`.
 #[derive(uniffi::Object)]
@@ -169,6 +242,26 @@ impl EditorSession {
     /// must use [`Self::viewport`] instead of caching a full copy.
     pub fn text(&self) -> String {
         self.lock().buffer.to_string()
+    }
+
+    /// Encodes the current text for saving, using the file's original format.
+    ///
+    /// The text snapshot and the version are taken under one lock; encoding runs
+    /// after the lock is released, so an `O(n)` pass does not block other edits for
+    /// longer than the snapshot copy. Callers must run this off the UI thread
+    /// (`architecture.md` §3.4) and write the returned bytes themselves.
+    ///
+    /// The method does not modify the text, caret or version and cannot fail: the
+    /// buffer invariant (no BOM, only `\n` line breaks) is established by
+    /// `codec::decode` when opening a file (`architecture.md` §3.2).
+    pub fn encode(&self, format: DocumentFormat) -> EncodedDocument {
+        let (version, text) = {
+            let doc = self.lock();
+            (doc.buffer.version(), doc.buffer.to_string())
+        };
+        let mut bytes = Vec::new();
+        codec::encode_into(&text, &format.into(), &mut bytes);
+        EncodedDocument { version, bytes }
     }
 
     /// Current document version. Increments on every text change, not on caret moves.
@@ -591,5 +684,125 @@ mod tests {
         assert_eq!(session.delete_range(2, 2).unwrap_or_default(), version);
         assert_eq!(session.text(), "abc");
         assert_eq!(session.version(), version);
+    }
+
+    fn format(bom: bool, line_ending: LineEnding) -> DocumentFormat {
+        DocumentFormat { bom, line_ending }
+    }
+
+    // Test helper: fails the test if decoding unexpectedly errors.
+    #[allow(clippy::panic)]
+    fn decode_ok(bytes: &[u8]) -> codec::DecodedText {
+        match codec::decode(bytes) {
+            Ok(decoded) => decoded,
+            Err(error) => panic!("decode failed: {error}"),
+        }
+    }
+
+    #[test]
+    fn encode_empty_document() {
+        let session = EditorSession::new();
+        let plain = session.encode(format(false, LineEnding::Lf));
+        assert!(plain.bytes.is_empty());
+        assert_eq!(plain.version, session.version());
+
+        let bom = session.encode(format(true, LineEnding::Lf));
+        assert_eq!(bom.bytes, [0xEF, 0xBB, 0xBF]);
+    }
+
+    #[test]
+    fn encode_uses_bom_and_crlf() {
+        let session = session_with("a\nb\n");
+        let encoded = session.encode(format(true, LineEnding::CrLf));
+        assert_eq!(
+            encoded.bytes,
+            [0xEF, 0xBB, 0xBF, b'a', b'\r', b'\n', b'b', b'\r', b'\n']
+        );
+        assert_eq!(encoded.version, session.version());
+    }
+
+    #[test]
+    fn encode_does_not_change_document_state() {
+        let session = session_with("a\n中🙂");
+        session.move_cursor(2);
+        let text = session.text();
+        let cursor = session.cursor();
+        let version = session.version();
+
+        let encoded = session.encode(format(true, LineEnding::CrLf));
+
+        assert_eq!(encoded.version, version);
+        assert_eq!(session.text(), text);
+        assert_eq!(session.cursor(), cursor);
+        assert_eq!(session.version(), version);
+    }
+
+    #[test]
+    fn encode_version_matches_the_encoded_text() {
+        let session = session_with("old");
+        let first = session.encode(format(false, LineEnding::Lf));
+        assert_eq!(first.bytes, b"old");
+
+        session.insert_text(" new".to_string());
+        let second = session.encode(format(false, LineEnding::Lf));
+        assert!(second.version > first.version);
+        assert_eq!(first.bytes, b"old");
+        assert_eq!(second.bytes, b"old new");
+    }
+
+    #[test]
+    fn format_mapping_round_trips() {
+        for bom in [false, true] {
+            for line_ending in [LineEnding::Lf, LineEnding::CrLf] {
+                let ffi = format(bom, line_ending);
+                let codec_format: codec::DocumentFormat = ffi.into();
+                assert_eq!(DocumentFormat::from(codec_format), ffi);
+            }
+        }
+        assert_eq!(
+            codec::LineEnding::from(LineEnding::CrLf),
+            codec::LineEnding::CrLf
+        );
+        assert_eq!(LineEnding::from(codec::LineEnding::Lf), LineEnding::Lf);
+    }
+
+    /// A6: every T-0009 fixture round-trips through
+    /// `decode -> insert_text -> encode`. Mixed line endings are excluded by
+    /// Q-T9-2, so all twelve fixtures here have uniform endings.
+    #[test]
+    fn a6_fixtures_round_trip_through_the_session() {
+        const UTF8_BOM: &[u8] = &[0xEF, 0xBB, 0xBF];
+        let mut bom_lf = UTF8_BOM.to_vec();
+        bom_lf.extend_from_slice(b"line one\nline two\n");
+        let mut bom_crlf = UTF8_BOM.to_vec();
+        bom_crlf.extend_from_slice(b"line one\r\nline two\r\n");
+        let mut bom_emoji = UTF8_BOM.to_vec();
+        bom_emoji.extend_from_slice("中文🙂\r\n日本語🚀\r\n".as_bytes());
+
+        let fixtures: [(&str, &[u8]); 12] = [
+            ("utf8_lf", b"line one\nline two\n"),
+            ("utf8_crlf", b"line one\r\nline two\r\n"),
+            ("bom_lf", &bom_lf),
+            ("bom_crlf", &bom_crlf),
+            ("bom_cjk_and_emoji", &bom_emoji),
+            ("no_trailing_newline", b"line one\r\nline two"),
+            ("empty", b""),
+            ("only_lf", b"\n\n\n"),
+            ("only_crlf", b"\r\n\r\n\r\n"),
+            ("lone_cr", b"a\rb\r"),
+            ("cjk_and_emoji", "中文🙂\r\n🙂🙂\r\n".as_bytes()),
+            ("cr_before_crlf", b"a\r\r\nb\r\n"),
+        ];
+        for (name, bytes) in fixtures {
+            let decoded = decode_ok(bytes);
+            let session = EditorSession::new();
+            session.insert_text(decoded.text.clone());
+            let encoded = session.encode(decoded.format.into());
+            assert_eq!(encoded.version, session.version());
+            assert_eq!(
+                encoded.bytes, bytes,
+                "fixture {name} did not round-trip through the session"
+            );
+        }
     }
 }

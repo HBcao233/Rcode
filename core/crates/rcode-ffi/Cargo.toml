@@ -12,6 +12,7 @@ name = "rcode_ffi"
 
 [dependencies]
 rcode-buffer = { path = "../rcode-buffer" }
+rcode-fs = { path = "../rcode-fs" }
 uniffi = "0.32.2"
 thiserror = { workspace = true }
 tracing = { workspace = true }

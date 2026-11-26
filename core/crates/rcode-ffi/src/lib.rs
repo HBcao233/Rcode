@@ -5,7 +5,10 @@
 
 mod editor;
 
-pub use editor::{EditorCursor, EditorError, EditorLine, EditorSession, EditorViewport};
+pub use editor::{
+    DocumentFormat, EditorCursor, EditorError, EditorLine, EditorSession, EditorViewport,
+    EncodedDocument, LineEnding,
+};
 
 use std::sync::Once;
 

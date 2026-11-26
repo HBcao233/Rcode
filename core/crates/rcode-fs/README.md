@@ -5,8 +5,9 @@ codec: bytes ↔ (buffer text + document format), with UTF-8 validation, BOM
 detection and LF/CRLF detection.
 
 No UniFFI, no Android APIs, no dependency on `rcode-buffer`. Reading files
-through SAF and writing them atomically stay in Kotlin/`rcode-ffi` (T-0012,
-T-0010); this crate only decides what the bytes mean.
+through SAF and writing them transactionally stay in Kotlin (`platform/document`,
+T-0012/T-0010); `rcode-ffi::EditorSession::encode` is the only caller of
+`encode_into` today, and Kotlin never re-implements the codec.
 
 ## Public API (`rcode_fs::codec`)
 
