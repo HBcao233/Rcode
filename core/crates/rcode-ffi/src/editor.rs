@@ -11,28 +11,69 @@
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use rcode_buffer::{BufferError, TextBuffer};
-use thiserror::Error;
 
 /// Upper bound for one viewport request, so a bad caller cannot allocate without limit.
 const MAX_VIEWPORT_LINES: u32 = 10_000;
 
 /// Errors returned by editing-session operations.
-#[derive(Debug, Error, uniffi::Error)]
+#[derive(Debug, thiserror::Error, uniffi::Error)]
 pub enum EditorError {
-    /// A byte offset was not on a UTF-8 character boundary.
+    /// An index was past the end of the document.
+    ///
+    /// `offset` and `len` are expressed in the unit of the failing argument:
+    /// bytes for byte-based methods, chars for [`TextBuffer::char_to_byte`],
+    /// UTF-16 code units for [`TextBuffer::utf16_to_byte`].
+    #[error("offset {offset} is out of bounds for length {len}")]
+    OutOfBounds {
+        /// Rejected index.
+        offset: u32,
+        /// Document length in the same unit as `offset`.
+        len: u32,
+    },
+    /// A byte offset fell inside a multi-byte UTF-8 sequence.
     #[error("byte offset {offset} is not on a UTF-8 character boundary")]
-    InvalidOffset {
-        /// Offending UTF-8 byte offset.
+    NotCharBoundary {
+        /// Rejected byte offset.
         offset: u32,
     },
-    /// The requested byte range was reversed or outside the document.
+    /// A byte range had `start > end`.
     #[error("byte range {start}..{end} is invalid")]
     InvalidRange {
-        /// Range start in UTF-8 bytes.
+        /// Range start in bytes.
         start: u32,
-        /// Range end in UTF-8 bytes (exclusive).
+        /// Range end in bytes (exclusive).
         end: u32,
     },
+    /// A line index was not in `0..line_count`.
+    #[error("line {line} is out of bounds for a document with {line_count} lines")]
+    LineOutOfBounds {
+        /// Rejected zero-based line index.
+        line: u32,
+        /// Number of lines in the document (always at least 1).
+        line_count: u32,
+    },
+}
+
+impl From<BufferError> for EditorError {
+    fn from(error: BufferError) -> Self {
+        match error {
+            BufferError::OutOfBounds { offset, len } => EditorError::OutOfBounds {
+                offset: to_u32(offset),
+                len: to_u32(len),
+            },
+            BufferError::NotCharBoundary { offset } => EditorError::NotCharBoundary {
+                offset: to_u32(offset),
+            },
+            BufferError::InvalidRange { start, end } => EditorError::InvalidRange {
+                start: to_u32(start),
+                end: to_u32(end),
+            },
+            BufferError::LineOutOfBounds { line, line_count } => EditorError::LineOutOfBounds {
+                line: to_u32(line),
+                line_count: to_u32(line_count),
+            },
+        }
+    }
 }
 
 /// Caret position in document coordinates.
@@ -84,39 +125,6 @@ pub struct EditorSession {
 /// total without silently wrapping.
 fn to_u32(value: usize) -> u32 {
     value.min(u32::MAX as usize) as u32
-}
-
-/// Maps a buffer error for a range operation to the FFI error, keeping the
-/// range the caller passed in the `InvalidRange` payload.
-fn range_error(start: usize, end: usize, error: BufferError) -> EditorError {
-    match error {
-        BufferError::NotCharBoundary { offset } => EditorError::InvalidOffset {
-            offset: to_u32(offset),
-        },
-        _ => EditorError::InvalidRange {
-            start: to_u32(start),
-            end: to_u32(end),
-        },
-    }
-}
-
-impl From<BufferError> for EditorError {
-    fn from(error: BufferError) -> Self {
-        match error {
-            BufferError::NotCharBoundary { offset } => EditorError::InvalidOffset {
-                offset: to_u32(offset),
-            },
-            BufferError::InvalidRange { start, end } => EditorError::InvalidRange {
-                start: to_u32(start),
-                end: to_u32(end),
-            },
-            BufferError::OutOfBounds { offset, .. } => EditorError::InvalidRange {
-                start: to_u32(offset),
-                end: to_u32(offset),
-            },
-            BufferError::LineOutOfBounds { .. } => EditorError::InvalidRange { start: 0, end: 0 },
-        }
-    }
 }
 
 struct Doc {
@@ -210,10 +218,7 @@ impl EditorSession {
     ) -> Result<u64, EditorError> {
         let mut doc = self.lock();
         let (start, end) = (start_byte as usize, end_byte as usize);
-        let edit = doc
-            .buffer
-            .replace(start..end, &text)
-            .map_err(|error| range_error(start, end, error))?;
+        let edit = doc.buffer.replace(start..end, &text)?;
         doc.cursor = edit.new_end_byte;
         Ok(edit.version)
     }

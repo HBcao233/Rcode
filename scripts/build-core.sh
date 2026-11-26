@@ -59,4 +59,4 @@ mkdir -p "$GEN"
     --out-dir "$GEN" \
     --no-format)
 
-echo "==> done: $APP/jniLibs/arm64-v8a/$LIB_NAME"
+echo "==> done: $GEN"

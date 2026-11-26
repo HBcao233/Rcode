@@ -39,12 +39,11 @@ use std::fmt;
 use std::ops::Range;
 
 use ropey::Rope;
-use thiserror::Error;
 
 /// Errors returned by [`TextBuffer`].
 ///
 /// No buffer method mutates the text when it returns an error.
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum BufferError {
     /// An index was past the end of the document.
     ///
