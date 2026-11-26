@@ -41,27 +41,16 @@
 这些任务字段完整，但部分依赖待确认项，实际领取前请先确认对应 Q 项。
 
 - [x] **T-0027 启动即编辑 untitled.txt（输入法可用）**
-  - 任务单 `T-0027-untitled-editor.md`
+  - 任务单 `T-0027-untitled-editor.md` Reviewed
 
-- [x] **T-0007 文本缓冲区核心（rope 替换 M1.0 临时 String）** — Review（`feat/m1-buffer-rope`；自动化检查通过，V9 真机回归与 V10 依赖审批待人类）
-  - 任务单 `T-0007-text-buffer.md`
-  - 类型：feat ｜ 模块：buffer、ffi ｜ 依赖：Q13（ropey、proptest）、T-0027
-  - 范围：新建 `core/crates/rcode-buffer`，基于 rope 的插入、删除、替换；按行、字节、字符（Unicode scalar）、UTF-16 查询；版本号递增；`rcode-ffi::EditorSession` 改用它（FFI 签名不变）。
-  - 验收：A4 中的 proptest 通过（≥1000 用例）；公开 API 带单位说明的 `///` 文档；无 `unwrap`/`expect`。
-  - 相关 skill：rust-core、testing-qa
+- [x] **T-0007 文本缓冲区核心（rope 替换 M1.0 临时 String）** — Reviewed（`feat/m1-buffer-rope`；自动化检查通过，V9 真机回归与 V10 依赖审批待人类）
+  - 任务单 `T-0007-text-buffer.md` Reviewed
 
-- [x] **T-0009 编码与换行检测（codec）** — Review（`feat/m1-codec`；自动化检查通过，V8 的 CRLF decode 51 ms 待人类确认）
-  - 任务单 `T-0009-codec.md`
-  - 类型：feat ｜ 模块：fs（新建 `core/crates/rcode-fs` 的 `codec` 模块，Q-T9-1）｜ 依赖：Q1、Q2
-  - 范围：检测 UTF-8 BOM、LF/CRLF；按记录的文件格式还原 BOM 与换行；非 UTF-8（含 UTF-16/32 BOM、NUL）拒绝打开。
-  - 验收：A6 中 Rust 侧 fixture 往返字节一致（UTF-8、UTF-8 BOM、LF、CRLF、CJK/emoji、空文件等 12 组）；混合换行文件按 Q-T9-2 统一为 dominant。
-  - 相关 skill：rust-core、testing-qa
+- [x] **T-0009 编码与换行检测（codec）**
+  - 任务单 `T-0009-codec.md` Reviewed（`feat/m1-codec`）
 
-- [x] **T-0010 原子保存（失败原子性）** — Review（`feat/m1-atomic-save`；`2b524f4` + `1f0205f`；JVM/DoD 通过，V4 仪器测试待有设备时运行）
-  - 类型：feat ｜ 模块：fs、ffi、platform ｜ 依赖：T-0009
-  - 范围：Rust `EditorSession.encode(format)` 生成字节；Kotlin 写应用私有临时文件 + 原文件备份，覆盖后回读校验，失败回滚。
-  - 验收：A7 注入失败测试通过（原文件字节不变）；A6 Rust 侧 `decode → session → encode` 往返一致；端到端 A6/A7 见 T-0013。
-  - 相关 skill：rust-core、uniffi-bridge、android-build、testing-qa
+- [x] **T-0010 原子保存（失败原子性）**
+  - 任务单 `T-0010-atomic-save.md` Reviewed（`feat/m1-atomic-save`）
 
 ## Backlog
 

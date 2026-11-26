@@ -3,7 +3,7 @@
 - **ID**：T-0010
 - **里程碑**：M1（A6、A7；G4；T-0013 保存 UI 的前置）
 - **类型**：feat
-- **状态**：Review
+- **状态**：Reviewed by HBcao
 - **分支**：`feat/m1-atomic-save`
 - **负责人**：agent（session `01a21779`，2026-11-26 领取）
 - **涉及模块**：fs（复用 `rcode-fs::codec`）、ffi（`rcode-ffi::EditorSession`）、platform（新建 `app/src/main/kotlin/com/hbcao/rcode/platform/document`）、bridge、editor API
