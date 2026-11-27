@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 
 use proptest::prelude::*;
 use proptest::test_runner::{Config, FileFailurePersistence};
-use rcode_buffer::{BufferError, Edit, History, MERGE_WINDOW, TextBuffer, UNDO_BYTE_LIMIT};
+use rcode_buffer::{History, MERGE_WINDOW, TextBuffer, UNDO_BYTE_LIMIT};
 
 /// Character pool: ASCII, CJK, astral-plane emoji, combining marks, `\n`,
 /// `\r\n`, a lone `\r`, and the empty string.
@@ -113,16 +113,6 @@ struct Model {
     redo: Vec<Snapshot>,
 }
 
-// Test helper: fails the test if the edit unexpectedly errors.
-#[allow(clippy::panic)]
-fn apply_edit(
-    buffer: &mut TextBuffer,
-    range: std::ops::Range<usize>,
-    text: &str,
-) -> Result<Edit, BufferError> {
-    buffer.replace(range, text)
-}
-
 proptest! {
     #![proptest_config(Config {
         cases: 1_000,
@@ -154,7 +144,7 @@ proptest! {
                 Op::Insert { at, text } => {
                     let at = resolve(at, &model.text);
                     let caret_before = at;
-                    if let Ok(edit) = apply_edit(&mut buffer, at..at, text) {
+                    if let Ok(edit) = buffer.replace(at..at, text) {
                         history.record(&edit, text, caret_before, now);
                         if edit.changed {
                             model.redo.clear();
@@ -177,7 +167,7 @@ proptest! {
                     let range = start.min(end)..start.max(end);
                     let caret_before = range.start;
                     let before_text = model.text.clone();
-                    if let Ok(edit) = apply_edit(&mut buffer, range.clone(), "") {
+                    if let Ok(edit) = buffer.replace(range.clone(), "") {
                         history.record(&edit, "", caret_before, now);
                         if edit.changed {
                             model.redo.clear();
@@ -200,7 +190,7 @@ proptest! {
                     let range = start.min(end)..start.max(end);
                     let caret_before = range.start;
                     let before_text = model.text.clone();
-                    if let Ok(edit) = apply_edit(&mut buffer, range.clone(), text) {
+                    if let Ok(edit) = buffer.replace(range.clone(), text) {
                         history.record(&edit, text, caret_before, now);
                         if edit.changed {
                             model.redo.clear();
