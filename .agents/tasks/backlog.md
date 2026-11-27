@@ -35,6 +35,14 @@
   - M1 是否需要支持其它应用通过 `ACTION_VIEW`/`ACTION_EDIT` 直接打开文件，还是仅应用内 SAF 选择。**M1 仅应用内选择**，入口放到 M2。
 - [x] **Q15 Undo 内存上限**：
   - 大文件的撤销历史是否限制条数或字节数。**按字节上限 64 MB 截断最旧历史**。
+- [ ] **Q-T8-1 组合输入是否纳入 T-0008**：
+  - 推荐 A：纳入。新增 `begin_composition`/`end_composition`，一次拼音提交 = 一个撤销步，取消组合 = 零步（符合 `editor-rendering` skill）。备选 B：只做 500 ms 时间窗口合并，组合输入留到 T-0011。详见 `tasks/T-0008-undo-redo.md`。
+- [ ] **Q-T8-2 连续编辑的合并上限**：
+  - 推荐：合并组达到 64 KiB 时断开（只在合并时生效，单次粘贴不受限），保证一次 undo 的耗时有界；备选：不设，仅受 Q15 的 64 MB 总上限约束。
+- [ ] **Q-T8-3 撤销/重做后的光标位置**：
+  - 推荐：undo 恢复到编辑前光标，redo 放在重做文本末尾；备选：只保证光标合法。
+- [ ] **Q-T8-4 撤销/重做 UI 接线归属**：
+  - 推荐：本任务只做 Rust + FFI + Kotlin 桥接/输入层；`MainScreen` 的 Undo/Redo 按钮与快捷键由 T-0013 或新建 T-0028 在 A12 前接线。备选：T-0008 顺带接线（需真机验证）。
 
 ## Ready（M1）
 
@@ -52,13 +60,15 @@
 - [x] **T-0010 原子保存（失败原子性）**
   - 任务单 `T-0010-atomic-save.md` Reviewed（`feat/m1-atomic-save`）
 
+- [ ] **T-0008 撤销/重做与操作合并**（依赖 T-0007，Q9、Q15）
+  - 任务单 `T-0008-undo-redo.md`，待确认 Q-T8-1..4）
+  - 验收：A5 的 proptest 通过；500 ms 内连续插入合并为一步；换行断开合并。
+
 ## Backlog
 
 ### 缓冲区与会话
-- [ ] **T-0008 撤销/重做与操作合并**（依赖 T-0007，Q9、Q15）
-  - 验收：A5 的 proptest 通过；500 ms 内连续插入合并为一步；换行断开合并。
 - [ ] **T-0011 编辑会话 FFI**（依赖 T-0007、T-0008、T-0009）
-  - 范围：通过 `rcode-ffi` 暴露 open / edit / undo / redo / 批量取行 / 当前版本号。Kotlin 侧不缓存完整文本（architecture §3.1）。
+  - 范围：通过 `rcode-ffi` 暴露 open / edit / 批量取行 / 当前版本号（undo / redo 已由 T-0008 导出，本任务复用并按需重组签名）。加载/替换文档内容后必须调用 `EditorSession::clear_history()`，加载本身不得成为可撤销步骤。Kotlin 侧不缓存完整文本（architecture §3.1）。
   - 验收：Kotlin 仪器测试可完成“打开 → 插入 → 撤销 → 取行”；FFI 层不 panic（`catch_unwind` 或等价保证）。
   - 相关 skill：uniffi-bridge、rust-core
 
