@@ -3,9 +3,9 @@
 - **ID**：T-0011
 - **里程碑**：M1（A1、A6、A7 的前置；A12 的“打开”步骤；G2、G3）
 - **类型**：feat
-- **状态**：Ready
+- **状态**：In Progress
 - **分支**：`feat/m1-t11-edit-session`（已创建）
-- **负责人**：未领取
+- **负责人**：deepseek-v4p1-flash-1017（2026-11-27 领取）
 - **涉及模块**：buffer（`TextBuffer` 的整体装载）/ ffi（`EditorSession::open`、`format()`、codec 错误映射、批量取行契约）/ editor（`EditorSessionApi`、打开错误类型）/ bridge（`UniffiEditorSession`、`FakeEditorSession`）
 - **相关 skill**：uniffi-bridge、rust-core、testing-qa、perf-benchmark（open 基准）；不涉及 Canvas 布局与 IME 状态机，不需要 editor-rendering、kotlin-compose-ui
 

@@ -151,6 +151,21 @@ impl TextBuffer {
         }
     }
 
+    /// Replaces the whole document content and increments the version exactly once.
+    ///
+    /// Used when a session opens or replaces a document (T-0011). This is not a
+    /// buffer edit: it returns no [`Edit`], and undo history is left to the
+    /// caller (the FFI session clears it right after). `text` must already be
+    /// normalized by the codec: no BOM, only `\n` line breaks.
+    ///
+    /// The version increments even when `text` equals the current content, so
+    /// that opening a document always invalidates caches keyed by the version.
+    pub fn reset(&mut self, text: &str) -> u64 {
+        self.rope = Rope::from_str(text);
+        self.bump_version();
+        self.version
+    }
+
     /// Current document version; starts at 1 and increments on every real edit.
     pub fn version(&self) -> u64 {
         self.version
@@ -911,5 +926,52 @@ mod tests {
     fn display_is_the_full_text() {
         let buffer = TextBuffer::from_str("a\n中🙂");
         assert_eq!(buffer.to_string(), "a\n中🙂");
+    }
+
+    #[test]
+    fn reset_replaces_the_content_and_bumps_the_version_once() {
+        let mut buffer = TextBuffer::from_str("old\ntext");
+        let version = buffer.reset("new\r\ntext\n");
+        assert_eq!(version, 2);
+        assert_eq!(buffer.version(), 2);
+        assert_eq!(buffer.to_string(), "new\r\ntext\n");
+        // Only `\n` breaks lines; a `\r` before `\n` is not part of the content.
+        assert_eq!(buffer.line_count(), 3);
+        assert_eq!(buffer.line_text(0), Ok("new".to_string()));
+        assert_eq!(buffer.line_text(1), Ok("text".to_string()));
+        assert_eq!(buffer.len_bytes(), "new\r\ntext\n".len());
+    }
+
+    #[test]
+    fn reset_accepts_empty_text_and_keeps_one_line() {
+        let mut buffer = TextBuffer::from_str("abc");
+        let version = buffer.reset("");
+        assert_eq!(version, 2);
+        assert!(buffer.is_empty());
+        assert_eq!(buffer.line_count(), 1);
+        assert_eq!(buffer.line_text(0), Ok(String::new()));
+        assert_eq!(buffer.to_string(), "");
+    }
+
+    #[test]
+    fn repeated_resets_are_monotonic_even_for_identical_text() {
+        let mut buffer = TextBuffer::from_str("same");
+        let first = buffer.reset("same");
+        let second = buffer.reset("same");
+        assert_eq!(first, 2);
+        assert_eq!(second, 3);
+        assert_eq!(buffer.version(), 3);
+        assert_eq!(buffer.to_string(), "same");
+    }
+
+    #[test]
+    fn reset_handles_a_megabyte_of_text() {
+        let text = "a\n中🙂".repeat(256 * 1024);
+        let mut buffer = TextBuffer::from_str("small");
+        let version = buffer.reset(&text);
+        assert_eq!(version, 2);
+        assert_eq!(buffer.len_bytes(), text.len());
+        assert_eq!(buffer.line_count(), 256 * 1024 + 1);
+        assert_eq!(buffer.to_string(), text);
     }
 }

@@ -12,6 +12,7 @@ Built on [`ropey`](https://docs.rs/ropey) 1.6 with default features disabled, so
 | Item | Purpose |
 |---|---|
 | `TextBuffer::new()` / `from_str(&str)` | Create an empty / filled document (version 1) |
+| `reset(&str)` | Replace the whole document (opening a file); version +1, no `Edit`, history untouched |
 | `insert(byte, &str)` | Insert at a byte offset |
 | `delete(range)` / `replace(range, &str)` | Erase / replace a byte range |
 | `Edit` | `start_byte`, `old_end_byte`, `new_end_byte`, `removed`, `version`, `changed` |
@@ -75,6 +76,12 @@ under the same lock as its buffer (architecture §3.3).
 Version starts at 1 and increments by one on every edit that changes the text.
 Queries, rejected edits and no-op edits (empty range replaced by an empty string)
 leave the version unchanged; the returned `Edit` then has `changed == false`.
+
+`reset(&str)` is the exception used for loading: it replaces the whole text and
+increments the version **exactly once**, even when the new text equals the old
+one, because opening a document must invalidate every cache keyed by the version
+(see `rcode-ffi::EditorSession::open`, T-0011). It returns no `Edit` and does not
+touch undo history: the session clears it, so loading is not an undoable step.
 
 ## Errors
 
