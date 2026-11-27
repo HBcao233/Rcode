@@ -90,6 +90,25 @@ class ContentResolverDocumentIo(
         )
     }
 
+    /**
+     * Q-T13-4: the created document is adopted, not read.
+     *
+     * `ACTION_CREATE_DOCUMENT` grants read/write for the result; persisting it here
+     * keeps the save-as target usable after the process restarts. Providers that
+     * refuse a persistent grant fall back to read-only exactly like [open] does.
+     */
+    override suspend fun adopt(key: DocumentKey): WritableDocument {
+        val uri = Uri.parse(key.uri)
+        val canWrite = takePersistablePermission(uri)
+        return WritableDocument(
+            key = key,
+            displayName = displayName(uri),
+            path = documentPath(uri),
+            canWrite = canWrite,
+            savable = ContentResolverDocument(resolver, uri),
+        )
+    }
+
     override suspend fun release(key: DocumentKey) {
         val uri = Uri.parse(key.uri)
         if (!releasePermission(uri, READ_WRITE_FLAGS)) {

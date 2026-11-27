@@ -20,4 +20,14 @@
     <string name="editor_large_file_title">Large file</string>
     <string name="editor_large_file_message">%1$s is %2$s. Opening it may use a lot of memory. Continue?</string>
     <string name="editor_large_file_confirm">Open anyway</string>
+    <string name="editor_saving">Saving…</string>
+    <string name="editor_save_picking">Choose where to save…</string>
+    <string name="editor_saved_named">Saved %1$s.</string>
+    <string name="editor_saved_dirty">Saved %1$s, but there are still unsaved changes.</string>
+    <string name="editor_save_failed_untouched">Saving failed. The file was not changed.</string>
+    <string name="editor_save_failed_restored">Saving failed. The previous contents of the file were restored.</string>
+    <string name="editor_save_failed_internal">Something went wrong while saving.</string>
+    <string name="editor_save_backup_lost_title">Saving failed and the file could not be restored</string>
+    <string name="editor_save_backup_lost_message">The original contents were saved in this backup file. Do not delete it:\n%1$s</string>
+    <string name="editor_save_backup_lost_confirm">OK</string>
 </resources>

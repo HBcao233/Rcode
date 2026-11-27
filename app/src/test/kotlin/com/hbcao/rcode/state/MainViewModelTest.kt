@@ -7,8 +7,11 @@ import com.hbcao.rcode.editor.UnsupportedEncodingKind
 import com.hbcao.rcode.platform.document.DocumentIo
 import com.hbcao.rcode.platform.document.DocumentKey
 import com.hbcao.rcode.platform.document.DocumentReadException
+import com.hbcao.rcode.platform.document.DocumentSaver
 import com.hbcao.rcode.platform.document.ReadDocument
 import com.hbcao.rcode.platform.document.SavableDocument
+import com.hbcao.rcode.platform.document.SaveResult
+import com.hbcao.rcode.platform.document.WritableDocument
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -60,6 +63,7 @@ class MainViewModelTest {
                     FakeBridge { "rcode-core 0.1.0" },
                     FakeEditorSession(),
                     FakeDocumentIo(),
+                    FakeDocumentSaver(),
                     StandardTestDispatcher(testScheduler),
                     StandardTestDispatcher(testScheduler),
                 )
@@ -75,6 +79,7 @@ class MainViewModelTest {
                     FakeBridge { throw IllegalStateException("boom") },
                     FakeEditorSession(),
                     FakeDocumentIo(),
+                    FakeDocumentSaver(),
                     StandardTestDispatcher(testScheduler),
                     StandardTestDispatcher(testScheduler),
                 )
@@ -90,6 +95,7 @@ class MainViewModelTest {
                 FakeBridge { "rcode-core 0.1.0" },
                 session,
                 FakeDocumentIo(),
+                FakeDocumentSaver(),
                 StandardTestDispatcher(),
                 StandardTestDispatcher(),
             )
@@ -436,6 +442,7 @@ class MainViewModelTest {
     private fun TestScope.newViewModel(
         io: DocumentIo,
         session: FakeEditorSession = FakeEditorSession(),
+        saver: FakeDocumentSaver = FakeDocumentSaver(),
         largeFileThresholdBytes: Long = MainViewModel.LARGE_FILE_THRESHOLD_BYTES,
         logger: (String, Throwable?) -> Unit = { _, _ -> },
     ): MainViewModel {
@@ -444,6 +451,7 @@ class MainViewModelTest {
             bridge = FakeBridge { "rcode-core 0.1.0" },
             editorSession = session,
             documentIo = io,
+            documentSaver = saver,
             workDispatcher = dispatcher,
             ioDispatcher = dispatcher,
             largeFileThresholdBytes = largeFileThresholdBytes,
@@ -452,8 +460,8 @@ class MainViewModelTest {
     }
 }
 
-/** In-memory [DocumentIo] for the open-flow tests; never touches Android APIs. */
-private class FakeDocumentIo : DocumentIo {
+/** In-memory [DocumentIo] for the open and save tests; never touches Android APIs. */
+internal class FakeDocumentIo : DocumentIo {
     private val documents = mutableMapOf<DocumentKey, ByteArray>()
     private val names = mutableMapOf<DocumentKey, String>()
     private val paths = mutableMapOf<DocumentKey, String>()
@@ -462,6 +470,7 @@ private class FakeDocumentIo : DocumentIo {
     /** [SavableDocument] per key, so tests can assert the handle handed to T-0013. */
     val savables = mutableMapOf<DocumentKey, SavableDocument>()
     val released = mutableListOf<DocumentKey>()
+    val adopted = mutableListOf<DocumentKey>()
     var openCount = 0
         private set
     var failure: Exception? = null
@@ -483,6 +492,18 @@ private class FakeDocumentIo : DocumentIo {
         savables[key] = FakeSavableDocument(key.uri, canWrite)
     }
 
+    /** Registers a `ACTION_CREATE_DOCUMENT` result: no contents, writable by default. */
+    fun addCreated(
+        key: DocumentKey,
+        displayName: String = key.uri.substringAfterLast('/'),
+        canWrite: Boolean = true,
+    ) {
+        names[key] = displayName
+        paths[key] = key.uri
+        writable[key] = canWrite
+        savables[key] = FakeSavableDocument(key.uri, canWrite)
+    }
+
     override suspend fun open(key: DocumentKey): ReadDocument {
         openCount += 1
         gate?.await()
@@ -498,12 +519,52 @@ private class FakeDocumentIo : DocumentIo {
         )
     }
 
+    override suspend fun adopt(key: DocumentKey): WritableDocument {
+        adopted += key
+        failure?.let { throw it }
+        return WritableDocument(
+            key = key,
+            displayName = names.getValue(key),
+            path = paths.getValue(key),
+            canWrite = writable.getValue(key),
+            savable = savables.getValue(key),
+        )
+    }
+
     override suspend fun release(key: DocumentKey) {
         released += key
     }
 }
 
-private class FakeSavableDocument(
+/** Records the bytes of every save and replays a configured failure. */
+internal class FakeDocumentSaver : DocumentSaver {
+    /** Bytes written to each document, keyed by handle; the last save wins. */
+    val written = mutableMapOf<SavableDocument, ByteArray>()
+    var saveCount = 0
+        private set
+
+    /** Returned by [save] instead of [SaveResult.Success] when set. */
+    var failure: SaveResult.Failure? = null
+
+    /** Thrown by [save] instead of returning a result when set. */
+    var error: Throwable? = null
+
+    /** When set, [save] suspends until it completes (concurrency tests). */
+    var gate: CompletableDeferred<Unit>? = null
+
+    override suspend fun save(
+        document: SavableDocument,
+        bytes: ByteArray,
+    ): SaveResult {
+        saveCount += 1
+        gate?.await()
+        error?.let { throw it }
+        written[document] = bytes
+        return failure ?: SaveResult.Success
+    }
+}
+
+internal class FakeSavableDocument(
     override val description: String,
     private val writable: Boolean,
 ) : SavableDocument {

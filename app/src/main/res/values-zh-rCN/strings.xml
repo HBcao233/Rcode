@@ -20,4 +20,14 @@
     <string name="editor_large_file_title">大文件</string>
     <string name="editor_large_file_message">%1$s 大小为 %2$s，打开可能占用较多内存。是否继续？</string>
     <string name="editor_large_file_confirm">继续打开</string>
+    <string name="editor_saving">正在保存…</string>
+    <string name="editor_save_picking">选择保存位置…</string>
+    <string name="editor_saved_named">已保存 %1$s。</string>
+    <string name="editor_saved_dirty">已保存 %1$s，但仍有未保存的修改。</string>
+    <string name="editor_save_failed_untouched">保存失败，原文件未被修改。</string>
+    <string name="editor_save_failed_restored">保存失败，已恢复原文件内容。</string>
+    <string name="editor_save_failed_internal">保存时发生未知错误。</string>
+    <string name="editor_save_backup_lost_title">保存失败且无法恢复原文件</string>
+    <string name="editor_save_backup_lost_message">原始内容已保存在以下备份文件中，请不要删除：\n%1$s</string>
+    <string name="editor_save_backup_lost_confirm">确定</string>
 </resources>

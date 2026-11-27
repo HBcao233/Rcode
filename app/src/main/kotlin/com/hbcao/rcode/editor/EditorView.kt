@@ -30,6 +30,8 @@ class EditorView(
     private val colors: EditorColors,
     /** Receives the new document version after every edit, open or undo/redo. */
     private val onVersionChanged: (Long) -> Unit = {},
+    /** Ctrl+S from a hardware keyboard (T-0013, Q-T13-1). */
+    private val onSaveRequested: () -> Unit = {},
 ) : View(context) {
     private val inputHandler = EditorInputHandler(session)
 
@@ -222,12 +224,23 @@ class EditorView(
     override fun onKeyDown(
         keyCode: Int,
         event: KeyEvent,
-    ): Boolean = performEditorKey(keyCode) || super.onKeyDown(keyCode, event)
+    ): Boolean {
+        if (isSaveShortcut(event)) {
+            // Key repeat must not queue several saves; the view model also ignores
+            // triggers while a transaction runs.
+            if (event.repeatCount == 0) onSaveRequested()
+            return true
+        }
+        return performEditorKey(keyCode) || super.onKeyDown(keyCode, event)
+    }
 
     override fun onKeyUp(
         keyCode: Int,
         event: KeyEvent,
-    ): Boolean = isEditorKey(keyCode) || super.onKeyUp(keyCode, event)
+    ): Boolean = isSaveShortcut(event) || isEditorKey(keyCode) || super.onKeyUp(keyCode, event)
+
+    /** Q-T13-1: `Ctrl+S` saves; hardware keys reach this focused view first. */
+    private fun isSaveShortcut(event: KeyEvent): Boolean = event.keyCode == KeyEvent.KEYCODE_S && event.isCtrlPressed
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {

@@ -45,6 +45,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
@@ -76,12 +77,16 @@ import com.hbcao.rcode.icons.Redo
 import com.hbcao.rcode.icons.Save
 import com.hbcao.rcode.icons.Terminal2
 import com.hbcao.rcode.icons.Undo
+import com.hbcao.rcode.platform.document.SaveStage
 import com.hbcao.rcode.platform.document.toDocumentKey
 import com.hbcao.rcode.state.DocumentUiState
 import com.hbcao.rcode.state.MainUiState
 import com.hbcao.rcode.state.MainViewModel
 import com.hbcao.rcode.state.OpenFailure
 import com.hbcao.rcode.state.OpenRequest
+import com.hbcao.rcode.state.SaveFailure
+import com.hbcao.rcode.state.SaveOutcome
+import com.hbcao.rcode.state.SaveRequest
 import com.hbcao.rcode.ui.theme.EditorColors
 
 /**
@@ -99,17 +104,31 @@ fun MainScreen(viewModel: MainViewModel) {
     val documentState by viewModel.documentState.collectAsStateWithLifecycle()
     val openRequest by viewModel.openRequest.collectAsStateWithLifecycle()
     val openError by viewModel.openError.collectAsStateWithLifecycle()
+    val saveRequest by viewModel.saveRequest.collectAsStateWithLifecycle()
+    val saveOutcome by viewModel.saveOutcome.collectAsStateWithLifecycle()
     val dirty by viewModel.dirty.collectAsStateWithLifecycle()
     val coreStatus = coreStatusText(state)
     val editorColors = editorColors()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
+    val isSaving = saveRequest is SaveRequest.Saving
     val openDocumentLauncher =
         rememberLauncherForActivityResult(OpenDocumentWithWriteAccess()) { uri ->
             if (uri != null) viewModel.openDocument(uri.toDocumentKey())
         }
+    val saveAsLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(SAVE_MIME_TYPE)) { uri ->
+            // Q-T13-4: a cancelled picker leaves the document untouched.
+            if (uri != null) viewModel.saveAs(uri.toDocumentKey()) else viewModel.cancelSave()
+        }
     val documentId = (documentState as? DocumentUiState.Opened)?.documentId ?: 0L
     val failureMessage = openError?.let { openFailureText(it, context) }
+    val saveMessage = saveOutcome?.let { saveOutcomeText(it) }
+    val suggestedSaveName =
+        when (val current = documentState) {
+            DocumentUiState.Untitled -> stringResource(R.string.editor_title_untitled)
+            is DocumentUiState.Opened -> current.fileName
+        }
 
     // Open failures are one-shot: show them, then let the view model drop them so a
     // rotation does not re-show a stale message.
@@ -117,6 +136,30 @@ fun MainScreen(viewModel: MainViewModel) {
         val message = failureMessage ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(message)
         viewModel.dismissOpenError()
+    }
+
+    // Save results are one-shot too; a lost backup is a dialog instead of a snackbar
+    // because the user must not delete the file it names (V5).
+    var backupLostPath by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(saveOutcome) {
+        val failure = (saveOutcome as? SaveOutcome.Failed)?.failure
+        if (failure is SaveFailure.BackupLost) {
+            backupLostPath = failure.backupPath
+            return@LaunchedEffect
+        }
+        val message = saveMessage ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message)
+        viewModel.dismissSaveOutcome()
+    }
+
+    // One picker launch per request: a rotation must not re-open it, a repeated
+    // request (new id) must.
+    var launchedSaveAsId by rememberSaveable { mutableStateOf(0L) }
+    LaunchedEffect(saveRequest) {
+        val request = saveRequest as? SaveRequest.SaveAs ?: return@LaunchedEffect
+        if (request.id == launchedSaveAsId) return@LaunchedEffect
+        launchedSaveAsId = request.id
+        saveAsLauncher.launch(suggestedSaveName)
     }
 
     Scaffold(
@@ -129,7 +172,11 @@ fun MainScreen(viewModel: MainViewModel) {
                             text = documentTitle(documentState, dirty),
                             style = MaterialTheme.typography.titleMedium,
                         )
-                        documentSubtitle(openRequest = openRequest, documentState = documentState)
+                        documentSubtitle(
+                            openRequest = openRequest,
+                            saveRequest = saveRequest,
+                            documentState = documentState,
+                        )
                     }
                 },
                 navigationIcon = {
@@ -148,7 +195,10 @@ fun MainScreen(viewModel: MainViewModel) {
                         )
                     }
                     MoreMenuButton(
-                        openEnabled = openRequest == null,
+                        saveEnabled = !isSaving,
+                        onSave = viewModel::saveDocument,
+                        onSaveAs = viewModel::saveAsNewDocument,
+                        openEnabled = openRequest == null && saveRequest == null,
                         onOpenFile = { openDocumentLauncher.launch(ANY_MIME_TYPE) },
                     )
                     /*Text(
@@ -162,7 +212,7 @@ fun MainScreen(viewModel: MainViewModel) {
         },
         bottomBar = {
             BottomActionBar(
-                row1Items = remember { provideRow1Items() },
+                row1Items = remember { provideRow1Items(onSave = viewModel::saveDocument) },
                 row2Items = remember { provideRow2Items() },
                 modifier =
                     Modifier
@@ -179,6 +229,7 @@ fun MainScreen(viewModel: MainViewModel) {
                     viewModel.editorSession,
                     editorColors,
                     onVersionChanged = viewModel::onDocumentVersionChanged,
+                    onSaveRequested = viewModel::saveDocument,
                 )
             },
             update = { view -> view.showDocument(documentId) },
@@ -187,6 +238,27 @@ fun MainScreen(viewModel: MainViewModel) {
     }
 
     OpenRequestDialogs(openRequest = openRequest, viewModel = viewModel, context = context)
+
+    backupLostPath?.let { path ->
+        AlertDialog(
+            onDismissRequest = {
+                backupLostPath = null
+                viewModel.dismissSaveOutcome()
+            },
+            title = { Text(stringResource(R.string.editor_save_backup_lost_title)) },
+            text = { Text(stringResource(R.string.editor_save_backup_lost_message, path)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        backupLostPath = null
+                        viewModel.dismissSaveOutcome()
+                    },
+                ) {
+                    Text(stringResource(R.string.editor_save_backup_lost_confirm))
+                }
+            },
+        )
+    }
 }
 
 /** `OpenDocument` that also asks for a write grant so the picked file can be saved in place. */
@@ -205,6 +277,9 @@ private class OpenDocumentWithWriteAccess : ActivityResultContracts.OpenDocument
 
 /** Q-T12-1: no MIME filter; the Rust UTF-8 check rejects non-text documents with a message. */
 private val ANY_MIME_TYPE = arrayOf("*/*")
+
+/** Q-T13-4: `CreateDocument` keeps the extension the user types in the suggested name. */
+private const val SAVE_MIME_TYPE = "*/*"
 
 @Composable
 private fun OpenRequestDialogs(
@@ -275,12 +350,19 @@ private fun documentTitle(
 @Composable
 private fun documentSubtitle(
     openRequest: OpenRequest?,
+    saveRequest: SaveRequest?,
     documentState: DocumentUiState,
 ) {
     val style = MaterialTheme.typography.bodySmall
     when {
         openRequest == OpenRequest.Reading ->
             Text(text = stringResource(R.string.editor_reading), style = style, maxLines = 1)
+
+        saveRequest is SaveRequest.Saving ->
+            Text(text = stringResource(R.string.editor_saving), style = style, maxLines = 1)
+
+        saveRequest is SaveRequest.SaveAs ->
+            Text(text = stringResource(R.string.editor_save_picking), style = style, maxLines = 1)
 
         documentState is DocumentUiState.Opened && !documentState.canWrite ->
             Row {
@@ -301,6 +383,39 @@ private fun documentSubtitle(
             PathText(path = documentState.path, style = style)
     }
 }
+
+/** Message for a save result; `null` when the backup-lost dialog shows it instead. */
+@Composable
+private fun saveOutcomeText(outcome: SaveOutcome): String? =
+    when (outcome) {
+        is SaveOutcome.Saved ->
+            if (outcome.stillDirty) {
+                stringResource(R.string.editor_saved_dirty, outcome.fileName)
+            } else {
+                stringResource(R.string.editor_saved_named, outcome.fileName)
+            }
+
+        is SaveOutcome.Failed -> saveFailureText(outcome.failure)
+    }
+
+/** Q-T13-6: stage-level wording; exception details stay in logcat. */
+@Composable
+private fun saveFailureText(failure: SaveFailure): String? =
+    when (failure) {
+        is SaveFailure.WriteFailed ->
+            when (failure.stage) {
+                SaveStage.WRITE_TEMP, SaveStage.READ_ORIGINAL ->
+                    stringResource(R.string.editor_save_failed_untouched)
+
+                SaveStage.WRITE_ORIGINAL, SaveStage.VERIFY ->
+                    stringResource(R.string.editor_save_failed_restored)
+
+                SaveStage.RESTORE -> stringResource(R.string.editor_save_failed_internal)
+            }
+
+        is SaveFailure.BackupLost -> null
+        SaveFailure.Internal -> stringResource(R.string.editor_save_failed_internal)
+    }
 
 /** Front-ellipsized document location: long paths keep their end (the file name). */
 @Composable
@@ -369,6 +484,9 @@ private fun editorColors(): EditorColors {
 
 @Composable
 private fun MoreMenuButton(
+    saveEnabled: Boolean,
+    onSave: () -> Unit,
+    onSaveAs: () -> Unit,
     openEnabled: Boolean,
     onOpenFile: () -> Unit,
 ) {
@@ -395,12 +513,20 @@ private fun MoreMenuButton(
         )
         DropdownMenuItem(
             text = { Text("保存") },
-            onClick = { showMenu = false },
+            enabled = saveEnabled,
+            onClick = {
+                showMenu = false
+                onSave()
+            },
             trailingIcon = { Icon(Save, contentDescription = null) },
         )
         DropdownMenuItem(
             text = { Text("另存为") },
-            onClick = { showMenu = false },
+            enabled = saveEnabled,
+            onClick = {
+                showMenu = false
+                onSaveAs()
+            },
             trailingIcon = { Icon(FileDownload, contentDescription = null) },
         )
         DropdownMenuItem(
@@ -473,7 +599,7 @@ data class ActionItem(
     val onClick: () -> Unit,
 )
 
-private fun provideRow1Items(): List<ActionItem> =
+private fun provideRow1Items(onSave: () -> Unit): List<ActionItem> =
     listOf(
         ActionItem(
             id = "row1_0",
@@ -550,7 +676,7 @@ private fun provideRow1Items(): List<ActionItem> =
                     modifier = Modifier.size(20.dp),
                 )
             },
-            onClick = {},
+            onClick = onSave,
         ),
         ActionItem(
             id = "row1_7",

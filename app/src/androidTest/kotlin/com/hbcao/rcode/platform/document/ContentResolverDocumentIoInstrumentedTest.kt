@@ -97,6 +97,28 @@ class ContentResolverDocumentIoInstrumentedTest {
         }
 
     @Test
+    fun adoptWithoutAPersistableGrantIsReadOnlyButUsable() =
+        runBlocking {
+            withFile(ORIGINAL) { file, key ->
+                val io = ContentResolverDocumentIo(resolver)
+                try {
+                    // `ACTION_CREATE_DOCUMENT` needs the picker; `file://` has no
+                    // persisted grant, so the fallback must report read-only without
+                    // crashing (Q-T13-4).
+                    val document = io.adopt(key)
+
+                    assertEquals(key, document.key)
+                    assertEquals(file.name, document.displayName)
+                    assertEquals(file.path, document.path)
+                    assertFalse(document.canWrite)
+                    assertArrayEquals(ORIGINAL, document.savable.openRead().use { it.readBytes() })
+                } finally {
+                    io.release(key)
+                }
+            }
+        }
+
+    @Test
     fun releaseIsANoOpWithoutAGrant() =
         runBlocking {
             withFile(ORIGINAL) { _, key ->

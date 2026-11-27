@@ -96,7 +96,7 @@ class AtomicDocumentSaverInstrumentedTest {
 }
 
 /** Passes reads through and fails the first overwrite after writing half of it. */
-private class FailingOverwriteDocument(
+internal class FailingOverwriteDocument(
     private val delegate: SavableDocument,
 ) : SavableDocument {
     private var writes = 0
@@ -135,7 +135,7 @@ private class CorruptVerifyDocument(
 }
 
 /** Writes half of the first chunk and then fails. */
-private class PartialFailingOutputStream(
+internal class PartialFailingOutputStream(
     private val delegate: OutputStream,
 ) : OutputStream() {
     override fun write(b: Int) {

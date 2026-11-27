@@ -65,7 +65,7 @@ import java.io.OutputStream
 class AtomicDocumentSaver(
     private val cacheDir: File,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
-) {
+) : DocumentSaver {
     private val mutex = Mutex()
 
     /**
@@ -75,7 +75,7 @@ class AtomicDocumentSaver(
      * [SaveResult.Failure]. [CancellationException] is propagated only after the
      * transaction reached a terminal state.
      */
-    suspend fun save(
+    override suspend fun save(
         document: SavableDocument,
         bytes: ByteArray,
     ): SaveResult =
