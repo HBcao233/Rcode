@@ -1295,18 +1295,16 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::panic)]
     fn open_reports_the_offset_of_invalid_utf8() {
         let session = EditorSession::new();
-        match session.open(b"ok\xFFbad".to_vec()) {
-            Err(EditorError::NotUtf8 { offset }) => assert_eq!(offset, 2),
-            Err(other) => panic!("unexpected error: {other}"),
-            Ok(_) => panic!("invalid UTF-8 must be rejected"),
-        }
+        let result = session.open(b"ok\xFFbad".to_vec());
+        assert!(
+            matches!(result, Err(EditorError::NotUtf8 { offset: 2 })),
+            "expected NotUtf8 at offset 2, got {result:?}"
+        );
     }
 
     #[test]
-    #[allow(clippy::panic)]
     fn open_rejects_unsupported_encodings_and_binary() {
         let session = EditorSession::new();
         let cases: [(&[u8], UnsupportedEncodingKind); 5] = [
@@ -1320,11 +1318,11 @@ mod tests {
             ),
         ];
         for (bytes, expected) in cases {
-            match session.open(bytes.to_vec()) {
-                Err(EditorError::UnsupportedEncoding { kind }) => assert_eq!(kind, expected),
-                Err(other) => panic!("unexpected error for {expected:?}: {other}"),
-                Ok(_) => panic!("input {expected:?} must be rejected"),
-            }
+            let kind = match session.open(bytes.to_vec()) {
+                Err(EditorError::UnsupportedEncoding { kind }) => Some(kind),
+                _ => None,
+            };
+            assert_eq!(kind, Some(expected), "input {expected:?} must be rejected");
         }
     }
 
