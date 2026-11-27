@@ -5,7 +5,7 @@
     <string name="editor_title_modified">%1$s*</string>
     <string name="editor_core_error">核心错误：%1$s</string>
     <string name="editor_reading">正在打开…</string>
-    <string name="editor_read_only">只读</string>
+    <string name="editor_read_only_prefix">只读 \u00b7\u0020</string>
     <string name="action_cancel">取消</string>
     <string name="editor_open_failed_not_found">文件已被移动或删除。</string>
     <string name="editor_open_failed_permission">没有读取该文件的权限，请重新选择。</string>

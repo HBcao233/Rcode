@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -49,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -127,14 +129,7 @@ fun MainScreen(viewModel: MainViewModel) {
                             text = documentTitle(documentState, dirty),
                             style = MaterialTheme.typography.titleMedium,
                         )
-                        Text(
-                            text = documentSubtitle(openRequest, documentState),
-                            style = MaterialTheme.typography.bodySmall,
-                            maxLines = 1,
-                            // Long document paths keep their end: the file name
-                            // stays visible (T-0013).
-                            overflow = TextOverflow.StartEllipsis,
-                        )
+                        documentSubtitle(openRequest = openRequest, documentState = documentState)
                     }
                 },
                 navigationIcon = {
@@ -281,14 +276,47 @@ private fun documentTitle(
 private fun documentSubtitle(
     openRequest: OpenRequest?,
     documentState: DocumentUiState,
-): String? =
+) {
+    val style = MaterialTheme.typography.bodySmall
     when {
-        openRequest == OpenRequest.Reading -> stringResource(R.string.editor_reading)
+        openRequest == OpenRequest.Reading ->
+            Text(text = stringResource(R.string.editor_reading), style = style, maxLines = 1)
+
         documentState is DocumentUiState.Opened && !documentState.canWrite ->
-            stringResource(R.string.editor_read_only)
-        documentState is DocumentUiState.Opened -> documentState.path
-        else -> null
+            Row {
+                // The marker keeps its own Text so the ellipsis can never eat it.
+                Text(
+                    text = stringResource(R.string.editor_read_only_prefix),
+                    style = style,
+                    maxLines = 1,
+                )
+                PathText(
+                    path = documentState.path,
+                    style = style,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+            }
+
+        documentState is DocumentUiState.Opened ->
+            PathText(path = documentState.path, style = style)
     }
+}
+
+/** Front-ellipsized document location: long paths keep their end (the file name). */
+@Composable
+private fun PathText(
+    path: String,
+    style: TextStyle,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = path,
+        style = style,
+        maxLines = 1,
+        overflow = TextOverflow.StartEllipsis,
+        modifier = modifier,
+    )
+}
 
 @Composable
 private fun openFailureText(

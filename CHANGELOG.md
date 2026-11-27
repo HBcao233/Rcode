@@ -170,4 +170,6 @@ All notable changes are documented here. Format follows Keep a Changelog.
   lives instead of staying empty — the real path for `file://`, `<volume root>/...`
   for the external-storage provider (`/storage/emulated/0/...`, `/storage/<id>/...`),
   and the decoded URI for other providers. Long paths are front-ellipsized
-  (`TextOverflow.StartEllipsis`) so the end of the path stays visible.
+  (`TextOverflow.StartEllipsis`) so the end of the path stays visible; a read-only
+  document shows `<read-only marker> · <path>` and the marker keeps its own text
+  node, so the ellipsis can never swallow it.
