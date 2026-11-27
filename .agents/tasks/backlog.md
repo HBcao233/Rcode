@@ -1,11 +1,16 @@
-# 任务: M0 / M1
+# 任务: M1
 
 按优先级从上到下排列。领取任务时，将状态改为 In Progress 并填写负责人。
 任务单模板见 `tasks/TEMPLATE.md`。每个任务开工前必须先补全模板中的验收标准。
 
-## 待确认（需人类回答后才能进入 Ready）
+## 待确认
 
 以下问题阻塞 M1 的部分任务。Agent 不得自行假设，推荐选项供人类参考。
+
+- [ ] **Q10 性能基准数据**：
+  - A1–A3 使用的 10 MB 测试文件构成（纯 ASCII / 含 CJK / 行长分布），以及参考机型（中端机具体型号）。
+
+## 已确认
 
 - [x] **Q1 非 UTF-8 文件**：
   - M1 遇到 GBK/Shift-JIS 等文件时：拒绝打开并提示，M1 范围只承诺 UTF-8。
@@ -23,8 +28,6 @@
   - **8–32 sp，默认 14 sp**。M1 仅做会话内有效，持久化在 M2 设置页完成。
 - [x] **Q9 撤销合并窗口**：
   - 连续输入合并的时间窗口，**500 ms**，且遇到换行或光标跳动时强制断开。
-- [ ] **Q10 性能基准数据**：
-  - A1–A3 使用的 10 MB 测试文件构成（纯 ASCII / 含 CJK / 行长分布），以及参考机型（中端机具体型号）。
 - [x] **Q11 语法高亮语言与 grammar 许可证**：
   - M1 固定为 Kotlin、Rust、JSON、Markdown、Python 五种。需确认各 tree-sitter grammar 许可证（预计 MIT）满足 `conventions.md` §6。
 - [x] **Q12 覆盖率工具**：
@@ -44,9 +47,7 @@
 - [x] **Q-T8-4 撤销/重做 UI 接线归属**：
   - 本任务只做 Rust + FFI + Kotlin 桥接/输入层；`MainScreen` 的 Undo/Redo 按钮与快捷键由 T-0013 或新建 T-0028 在 A12 前接线（含按钮 enable 状态、撤销后 `updateSelection`、真机验证）。
 
-## Ready（M1）
-
-这些任务字段完整，但部分依赖待确认项，实际领取前请先确认对应 Q 项。
+## Ready
 
 - [x] **T-0027 启动即编辑 untitled.txt（输入法可用）**
   - 任务单 `T-0027-untitled-editor.md` - Reviewed
@@ -60,14 +61,15 @@
 - [x] **T-0010 原子保存（失败原子性）**
   - 任务单 `T-0010-atomic-save.md` - Reviewed（`feat/m1-atomic-save`）
 
-- [ ] **T-0008 撤销/重做与操作合并**（依赖 T-0007，Q9、Q15）
-  - 任务单 `T-0008-undo-redo.md` - In Progress（`feat/m1-t8-undo-redo`，负责人 deepseek-v4p1-flash-1017）
+- [x] **T-0008 撤销/重做与操作合并**（依赖 T-0007，Q9、Q15）
+  - 任务单 `T-0008-undo-redo.md` - Reviewed（`feat/m1-t8-undo-redo`，负责人 deepseek-v4p1-flash-1017）
   - 验收：A5 的 proptest 通过；500 ms 内连续插入合并为一步；换行断开合并。
 
 ## Backlog
 
 ### 缓冲区与会话
 - [ ] **T-0011 编辑会话 FFI**（依赖 T-0007、T-0008、T-0009）
+  - 任务单: `` - Backlog
   - 范围：通过 `rcode-ffi` 暴露 open / edit / 批量取行 / 当前版本号（undo / redo 已由 T-0008 导出，本任务复用并按需重组签名）。加载/替换文档内容后必须调用 `EditorSession::clear_history()`，加载本身不得成为可撤销步骤。Kotlin 侧不缓存完整文本（architecture §3.1）。
   - 验收：Kotlin 仪器测试可完成“打开 → 插入 → 撤销 → 取行”；FFI 层不 panic（`catch_unwind` 或等价保证）。
   - 相关 skill：uniffi-bridge、rust-core

@@ -3,9 +3,9 @@
 - **ID**：T-0008
 - **里程碑**：M1（A5；G2、G3；A12 的“撤销”步骤与 T-0011 的前置）
 - **类型**：feat
-- **状态**：Review（Q-T8-1..4 已确认；本机 DoD 通过，等待审查）
+- **状态**：Reviewed（Q-T8-1..4 已确认；本机 DoD 通过）
 - **分支**：`feat/m1-t8-undo-redo`
-- **负责人**：deepseek-v4p1-flash-1017 <>（2026-11-27 领取）
+- **负责人**：deepseek-v4p1-flash-1017 <>（2026-11-27 08:54 领取）
 - **涉及模块**：buffer（新增 `rcode-buffer::history`）/ ffi（`rcode-ffi::EditorSession`）/ editor（`EditorInputHandler` 的组合边界）/ bridge（`EditorSessionApi`、`UniffiEditorSession`、`FakeEditorSession`）
 - **相关 skill**：rust-core、testing-qa、uniffi-bridge、editor-rendering、perf-benchmark（不涉及 Canvas 布局与 Compose，不需要 kotlin-compose-ui）
 
@@ -266,12 +266,12 @@ impl EditorSession {
 
 （原建议切分，保留作参考）
 
-1. **测试先行（buffer）**：写 `history` 单元测试与 `prop_undo` 的失败用例（A5、合并、截断、组合），确认当前失败。
-2. **实现 `History`**：`feat(buffer): add undo history with time-window grouping` — `UndoGroup`、四类组、合并/丢弃/截断、组合边界；使单元测试与属性测试通过；补 Criterion 基准。
-3. **FFI 接入**：`feat(ffi): expose undo, redo and composition boundaries` — `Doc` 持有 `History`，所有编辑记录，新增 7 个导出方法，Rust 单元测试；`scripts/build-core.sh` 重新生成绑定并检查 `git diff` 只有新增。
-4. **Kotlin 桥接**：`feat(editor): group IME composition into one undo step` — `EditorSessionApi`/`UniffiEditorSession`/`FakeEditorSession`，`EditorInputHandler` 组合边界；JVM 测试。
-5. **仪器测试**：扩展 `EditorSessionInstrumentedTest`；有设备则运行，无设备记录原因。
-6. **文档收尾**：architecture、buffer README、glossary、CHANGELOG、backlog、本任务单；运行完整 DoD 命令。
+> 1. **测试先行（buffer）**：写 `history` 单元测试与 `prop_undo` 的失败用例（A5、合并、截断、组合），确认当前失败。
+> 2. **实现 `History`**：`feat(buffer): add undo history with time-window grouping` — `UndoGroup`、四类组、合并/丢弃/截断、组合边界；使单元测试与属性测试通过；补 Criterion 基准。
+> 3. **FFI 接入**：`feat(ffi): expose undo, redo and composition boundaries` — `Doc` 持有 `History`，所有编辑记录，新增 7 个导出方法，Rust 单元测试；`scripts/build-core.sh` 重新生成绑定并检查 `git diff` 只有新增。
+> 4. **Kotlin 桥接**：`feat(editor): group IME composition into one undo step` — `EditorSessionApi`/`UniffiEditorSession`/`FakeEditorSession`，`EditorInputHandler` 组合边界；JVM 测试。
+> 5. **仪器测试**：扩展 `EditorSessionInstrumentedTest`；有设备则运行，无设备记录原因。
+> 6. **文档收尾**：architecture、buffer README、glossary、CHANGELOG、backlog、本任务单；运行完整 DoD 命令。
 
 ## 测试方案
 
