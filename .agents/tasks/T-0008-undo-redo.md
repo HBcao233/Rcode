@@ -3,9 +3,9 @@
 - **ID**：T-0008
 - **里程碑**：M1（A5；G2、G3；A12 的“撤销”步骤与 T-0011 的前置）
 - **类型**：feat
-- **状态**：待确认（Q-T8-1..4 需人类回答后才能改为 Ready）
-- **分支**：`feat/m1-t8-undo-redo`（已创建）
-- **负责人**：deepseek-v4p1-flash-1017 <>（未领取）
+- **状态**：Review（Q-T8-1..4 已确认；本机 DoD 通过，等待审查）
+- **分支**：`feat/m1-t8-undo-redo`
+- **负责人**：deepseek-v4p1-flash-1017 <>（2026-11-27 领取）
 - **涉及模块**：buffer（新增 `rcode-buffer::history`）/ ffi（`rcode-ffi::EditorSession`）/ editor（`EditorInputHandler` 的组合边界）/ bridge（`EditorSessionApi`、`UniffiEditorSession`、`FakeEditorSession`）
 - **相关 skill**：rust-core、testing-qa、uniffi-bridge、editor-rendering、perf-benchmark（不涉及 Canvas 布局与 Compose，不需要 kotlin-compose-ui）
 
@@ -237,22 +237,34 @@ impl EditorSession {
 
 ## 验收标准
 
-- [ ] **V1** `core/crates/rcode-buffer` 新增 `history` 模块，不依赖 UniFFI，不新增外部依赖；`cargo doc -p rcode-buffer --no-deps` 无警告；库代码无 `unwrap`/`expect`/`panic!`。
-- [ ] **V2（A5）** `prop_undo` 以 1000 用例通过：任意编辑/undo/redo 混合序列下，全部 undo 回到初始文本、全部 redo 回到最终文本、undo 后新编辑清空 redo；参考模型与实现逐步一致。
-- [ ] **V3** 分组规则由单元测试与属性测试覆盖：500 ms 边界、换行断开、光标跳动断开、插入/删除/替换/组合四类、净空组丢弃、`commitText` 全等替换不产生步骤。
-- [ ] **V4** Q15 上限：历史字节数超过 64 MB 时从最旧丢弃并至少保留最新一组；截断后 `can_undo` 最终为 false 且不 panic；用注入的小上限验证，属性测试断言计数不超限（最新组例外）。
-- [ ] **V5** 组合输入（Q-T8-1 方案 A）：Rust 与 Kotlin 测试都证明一次拼音组合提交 = 一个撤销步，取消组合 = 零个撤销步，慢速（> 500 ms/键）组合仍然合并。
-- [ ] **V6** `EditorSession` 导出 `undo`/`redo`/`can_undo`/`can_redo`/`clear_history`/`begin_composition`/`end_composition`；现有方法签名与记录字段不变；UniFFI 绑定通过 `scripts/build-core.sh` 重新生成。
-- [ ] **V7** `undo`/`redo` 返回新版本号并恢复正确光标（按 Q-T8-3 推荐：undo = 编辑前，redo = 重做文本末尾）；无内容时返回 `None` 且版本不变；`editor.rs` 单元测试覆盖。
-- [ ] **V8** Criterion 基准已运行并记录：10 MB 文档上 `record`、单字符 undo/redo 中位数 < 1 ms，64 KiB 组 undo 中位数 < 4 ms（architecture §3.4）；数值写进交接记录并注明设备。
-- [ ] **V9** Kotlin `EditorSessionApi`/`UniffiEditorSession`/`FakeEditorSession` 与输入处理已更新；`./gradlew :app:testDebugUnitTest` 通过，新增的 IME 撤销测试覆盖拼音提交与取消。
-- [ ] **V10** 仪器测试（FFI undo/redo、组合输入）已写好并编译；有设备时 `:app:connectedDebugAndroidTest` 通过，无设备时在交接记录明确“未运行”及原因（同 T-0007/T-0010）。
-- [ ] **V11** DoD（conventions §7）本机可完成部分：fmt / clippy / test / doc / ktlint / lint / 单元测试 / assembleDebug / CHANGELOG / glossary / architecture / 任务单 / backlog；无 UI 改动，不需要截图。
-- [ ] **V12** `git diff` 只包含任务列出的文件；未改 Manifest/权限/包名/签名，未新增外部依赖；`clear_history` 在加载文件后的调用要求已写入 backlog 的 T-0011 条目。
+- [x] **V1** `core/crates/rcode-buffer` 新增 `history` 模块，不依赖 UniFFI，不新增外部依赖；`cargo doc -p rcode-buffer --no-deps` 无警告；库代码无 `unwrap`/`expect`/`panic!`。
+- [x] **V2（A5）** `prop_undo` 以 1000 用例通过：任意编辑/undo/redo 混合序列下，全部 undo 回到初始文本、全部 redo 回到最终文本、undo 后新编辑清空 redo；参考模型与实现逐步一致。
+- [x] **V3** 分组规则由单元测试与属性测试覆盖：500 ms 边界、换行断开、光标跳动断开、插入/删除/替换/组合四类、净空组丢弃、`commitText` 全等替换不产生步骤。
+- [x] **V4** Q15 上限：历史字节数超过 64 MB 时从最旧丢弃并至少保留最新一组；截断后 `can_undo` 最终为 false 且不 panic；用注入的小上限验证，属性测试断言计数不超限（最新组例外）。
+- [x] **V5** 组合输入（Q-T8-1 方案 A）：Rust 与 Kotlin 测试都证明一次拼音组合提交 = 一个撤销步，取消组合 = 零个撤销步，慢速（> 500 ms/键）组合仍然合并。
+- [x] **V6** `EditorSession` 导出 `undo`/`redo`/`can_undo`/`can_redo`/`clear_history`/`begin_composition`/`end_composition`；现有方法签名与记录字段不变；UniFFI 绑定通过 `scripts/build-core.sh` 重新生成。
+- [x] **V7** `undo`/`redo` 返回新版本号并恢复正确光标（按 Q-T8-3 推荐：undo = 编辑前，redo = 重做文本末尾）；无内容时返回 `None` 且版本不变；`editor.rs` 单元测试覆盖。
+- [x] **V8** Criterion 基准已运行并记录：10 MB 文档上 `record`、单字符 undo/redo 中位数 < 1 ms，64 KiB 组 undo 中位数 < 4 ms（architecture §3.4）；数值写进交接记录并注明设备。
+- [x] **V9** Kotlin `EditorSessionApi`/`UniffiEditorSession`/`FakeEditorSession` 与输入处理已更新；`./gradlew :app:testDebugUnitTest` 通过，新增的 IME 撤销测试覆盖拼音提交与取消。
+- [x] **V10** 仪器测试（FFI undo/redo、组合输入）已写好并编译；有设备时 `:app:connectedDebugAndroidTest` 通过，无设备时在交接记录明确“未运行”及原因（同 T-0007/T-0010）。
+- [x] **V11** DoD（conventions §7）本机可完成部分：fmt / clippy / test / doc / ktlint / lint / 单元测试 / assembleDebug / CHANGELOG / glossary / architecture / 任务单 / backlog；无 UI 改动，不需要截图。
+- [x] **V12** `git diff` 只包含任务列出的文件；未改 Manifest/权限/包名/签名，未新增外部依赖；`clear_history` 在加载文件后的调用要求已写入 backlog 的 T-0011 条目。
 
 ## 计划
 
-（实现 agent 填写实际执行；建议切分如下，每组都能独立编译并通过测试）
+实际执行（2026-11-27）：
+
+1. 更新 backlog（Q-T8-1..4 → 已确认，T-0008 → In Progress）。
+2. `rcode-buffer::history`：`UndoGroup`/`History`、四类组、500 ms 合并、64 KiB 合并上限、净空组丢弃、64 MiB 截断、组合边界；先写 `history.rs` 单元测试。
+3. `tests/prop_undo.rs`（A5，1000 用例）与 `tests/prop_history.rs`（分组不变量）。
+4. `benches/history.rs`（10 MB 文档：record、单字符 undo/redo、64 KiB 组 undo）。
+5. `rcode-ffi::EditorSession`：`Doc` 增加 `history`，编辑方法记录，新增 7 个导出方法；`editor.rs` 单元测试；`scripts/build-core.sh` 重新生成绑定。
+6. Kotlin：`EditorSessionApi`/`UniffiEditorSession`/`FakeEditorSession`、`EditorInputHandler` 组合边界、`EditorView` 方向键/点击前结束组合；JVM 与仪器测试。
+7. 文档与 DoD：architecture、buffer README、glossary、CHANGELOG、backlog、任务单。
+
+**实现时发现的任务单内部矛盾（记录，不新增 Q）**：§4 要求 `commitText`/`deleteSurroundingText` 先 `end_composition()` 再改文本。按该顺序，拼音以不同文本提交（`nihao` → `你好`）会先封口组合组、再产生一个 Replace 组，撤销两次才能去掉一个词，与 V5/D 的“一次拼音组合提交 = 一个撤销步”“取消组合 = 零步”冲突。实现改为**先执行文本操作、再 `end_composition()`**：提交/取消都能并入同一个组合组（净空则丢弃），满足 V5；`finishComposingText` 仍只结束组合，不产生编辑。
+
+（原建议切分，保留作参考）
 
 1. **测试先行（buffer）**：写 `history` 单元测试与 `prop_undo` 的失败用例（A5、合并、截断、组合），确认当前失败。
 2. **实现 `History`**：`feat(buffer): add undo history with time-window grouping` — `UndoGroup`、四类组、合并/丢弃/截断、组合边界；使单元测试与属性测试通过；补 Criterion 基准。
@@ -302,10 +314,22 @@ bash ./scripts/build-core.sh                 # 重新生成 Kotlin 绑定，检�
 
 ## 交接记录
 
-- 日期：
-- 分支与提交：
-- 已完成：
-- 未完成：
+- 日期：2026-11-27
+- 分支与提交：`feat/m1-t8-undo-redo`；实现提交见 `git log`（`feat(buffer): add undo history with time-window grouping` 系列）与本次任务单提交哈希见下一条记录。
+- 已完成：V1–V12 的本机部分全部完成。`rcode-buffer::history`（`History`/`UndoGroup`、插入/删除/替换/组合四类组、500 ms 合并、64 KiB 合并上限、净空组丢弃、64 MiB 截断、组合边界）；`prop_undo`（A5，1000 用例）与 `prop_history` 属性测试；Criterion `benches/history.rs`；`EditorSession` 新增 7 个导出方法并在所有编辑方法内记录；UniFFI 绑定由 `scripts/build-core.sh` 重新生成；Kotlin `EditorSessionApi`/`UniffiEditorSession`/`FakeEditorSession`/`EditorInputHandler`/`EditorView` 接入；JVM 与仪器测试；architecture、buffer README、glossary、CHANGELOG、backlog、本任务单。
+- 未完成：`MainScreen` 的 Undo/Redo 按钮接线（Q-T8-4，留给 T-0028）；`clear_history()` 在加载文件后的实际调用（T-0011/T-0012）；真机仪器测试未运行。
 - 测试结果：
-- 基准：
-- 下一步建议：
+  - `cd core && cargo fmt --all -- --check`：通过
+  - `cd core && cargo clippy --workspace --all-targets -- -D warnings`：通过
+  - `cd core && cargo test --workspace`：通过（rcode-buffer 29 单元 + prop_buffer 1 + prop_undo 1 + prop_history 3；rcode-ffi 27；rcode-fs 23 + prop_codec 3）
+  - `cd core && cargo doc -p rcode-buffer --no-deps`：通过，无警告
+  - `bash ./scripts/build-core.sh`：通过（arm64-v8a release + UniFFI Kotlin 绑定）
+  - `./gradlew :app:ktlintCheck :app:lintDebug :app:testDebugUnitTest :app:assembleDebug :app:compileDebugAndroidTestKotlin`：BUILD SUCCESSFUL；JVM 35 tests（EditorInputHandlerTest 18、Utf8OffsetsTest 4、AtomicDocumentSaverTest 10、MainViewModelTest 3）全部通过
+  - `:app:connectedDebugAndroidTest`：**未运行**，当前 Termux 环境无设备；代码已通过 `compileDebugAndroidTestKotlin`，仪器用例已新增（FFI undo/redo、组合一次撤销、clearHistory）。
+- 基准（`cargo bench -p rcode-buffer --bench history`，设备 WIKO GAR-AN60 / Android 11 / aarch64 / 8 核，10 MB 合成文档）：
+  - `history_record_single_char_with_truncation`：373.7 ns（中位数区间 372.1–375.6 ns）
+  - `history_undo_single_char`：8.12 µs（8.07–8.19 µs）
+  - `history_redo_single_char`：8.32 µs（8.22–8.40 µs）
+  - `history_undo_64k_group`：143.7 µs（143.0–144.4 µs）
+  - 结论：均远低于 V8 的 1 ms / 4 ms 目标。
+- 下一步建议：T-0028 接线 `MainScreen` 的 Undo/Redo 按钮（enable 状态来自 `canUndo`/`canRedo`、撤销后通知 IME `updateSelection`、真机验证）；T-0011 在加载/替换文档后调用 `clear_history()`；有设备时运行 `:app:connectedDebugAndroidTest`。

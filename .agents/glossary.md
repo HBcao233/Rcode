@@ -13,6 +13,10 @@
 | Viewport | 当前屏幕可见的文本区域 |
 | IME | 输入法编辑器，Android 上通过 `InputConnection` 与应用交互 |
 | Composing text | 输入法尚未确认的组合文本 |
+| 撤销组（undo group） | 撤销/重做最小单位：`start_byte` + `removed` + `inserted` + `cursor_before`；一次 undo 回放一个组 |
+| 合并窗口（merge window） | 连续同向编辑仍合并为同一组的最长间隔，M1 固定 500 ms（Q9）；换行或光标跳动强制断开 |
+| 组合输入组（composition group） | IME 一次组合（拼音输入到选词提交）形成的撤销组；不受 500 ms 限制，取消组合时不留下撤销步 |
+| 历史字节数（history bytes） | undo + redo 所有组的 `removed.len() + inserted.len()` 之和，用于 64 MiB 截断（Q15）；字符串头部开销不计 |
 | UniFFI | Mozilla 开发的工具，从 Rust 生成 Kotlin/Swift/Python 绑定 |
 | JNI | Java Native Interface，JVM 调用原生代码的机制 |
 | SAF | Storage Access Framework，Android 文件访问框架，通过 URI 访问文件 |

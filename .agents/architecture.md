@@ -48,12 +48,15 @@ Kotlin 不得缓存完整文本副本作为权威数据。
 - **所有权**：跨 FFI 传递的字符串统一使用 UTF-8；行号、偏移量统一定义为字节偏移与“字符（Unicode scalar）”两套，接口注释必须写清楚使用哪一套。
 - **换行**：缓冲区内部只把 `\n` 当作换行符。CRLF 自然算一个换行，`\r` 不计入行内容；单独的 `\r`、U+2028 等是普通字符。BOM 与换行由 `rcode-fs::codec`（T-0009）检测与还原：`decode` 剥掉 BOM 并把 `\r\n` 归一化为 `\n`，`encode` 按记录的 `DocumentFormat`（是否 BOM + 单一换行形式）写回。因此**缓冲区文本不含 BOM、只含 `\n`**。文件的换行形式混合时只记录主导形式，保存时统一为它（Q-T9-2，见 `core/crates/rcode-fs/README.md`）。
 - **保存编码**：保存时由 `EditorSession::encode(format)`（T-0010）在 Rust 内调用 `codec::encode_into` 生成字节，并在同一把锁内取文本快照与版本号；Kotlin 只负责把字节写入 URI，不得用 `text()` 自行编码（违反 §3.1 并重复 codec 逻辑）。
+- **撤销/重做**：历史在 `rcode-buffer::history`，与文本同锁；一次 undo 回放一个撤销组（§3.3）。加载或替换文档内容后必须 `clear_history()`，加载本身不是可撤销步骤（T-0011/T-0012）。
+- **IME 组合**：组合输入只在 Kotlin 侧有区间；`EditorInputHandler` 用 `begin_composition()` / `end_composition()` 把一次组合的编辑合并为一个撤销组，组合期间不产生独立撤销步（T-0008）。
 
 ### 3.3 编辑器渲染
 - 只绘制可见行（LazyColumn 不适合作为文本编辑器的底层，使用自定义 Canvas/View 绘制）。
 - 行布局缓存按版本号失效。
 - 高亮采用“视口 + 预取一屏”策略。
 - M1.0 实现：`rcode-ffi::EditorSession` 基于 `rcode-buffer::TextBuffer`（`ropey` rope，只以 `\n` 分隔行）；一次 `viewport(first_line, max_lines)` 返回可见行、行首字节偏移和光标。T-0011 会用完整会话（多文档、批量取行协议）替换，但 Kotlin 侧“只缓存当前版本可见行”的约定不变。
+- 撤销/重做（T-0008）：`EditorSession` 的 `Doc` 持有 `rcode-buffer::History`，与 `TextBuffer` 共用一把 `Mutex`。undo/redo 是一次 rope 替换，返回新版本号；历史按 64 MiB 文本字节截断最旧组，连续编辑在 500 ms 窗口内合并为一步。Kotlin 只拿到 `undo()`/`redo()`/`canUndo()`/`canRedo()`/`clearHistory()` 与组合边界，看不到组结构。
 
 ### 3.4 线程模型
 - UI 线程：仅做绘制和输入分发。

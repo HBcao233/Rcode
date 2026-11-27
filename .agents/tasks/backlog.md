@@ -35,33 +35,33 @@
   - M1 是否需要支持其它应用通过 `ACTION_VIEW`/`ACTION_EDIT` 直接打开文件，还是仅应用内 SAF 选择。**M1 仅应用内选择**，入口放到 M2。
 - [x] **Q15 Undo 内存上限**：
   - 大文件的撤销历史是否限制条数或字节数。**按字节上限 64 MB 截断最旧历史**。
-- [ ] **Q-T8-1 组合输入是否纳入 T-0008**：
-  - 推荐 A：纳入。新增 `begin_composition`/`end_composition`，一次拼音提交 = 一个撤销步，取消组合 = 零步（符合 `editor-rendering` skill）。备选 B：只做 500 ms 时间窗口合并，组合输入留到 T-0011。详见 `tasks/T-0008-undo-redo.md`。
-- [ ] **Q-T8-2 连续编辑的合并上限**：
-  - 推荐：合并组达到 64 KiB 时断开（只在合并时生效，单次粘贴不受限），保证一次 undo 的耗时有界；备选：不设，仅受 Q15 的 64 MB 总上限约束。
-- [ ] **Q-T8-3 撤销/重做后的光标位置**：
-  - 推荐：undo 恢复到编辑前光标，redo 放在重做文本末尾；备选：只保证光标合法。
-- [ ] **Q-T8-4 撤销/重做 UI 接线归属**：
-  - 推荐：本任务只做 Rust + FFI + Kotlin 桥接/输入层；`MainScreen` 的 Undo/Redo 按钮与快捷键由 T-0013 或新建 T-0028 在 A12 前接线。备选：T-0008 顺带接线（需真机验证）。
+- [x] **Q-T8-1 组合输入是否纳入 T-0008**：
+  - 方案 A：纳入。新增 `begin_composition`/`end_composition`，一次拼音提交 = 一个撤销步，取消组合 = 零步（符合 `editor-rendering` skill）。
+- [x] **Q-T8-2 连续编辑的合并上限**：
+  - 合并组达到 64 KiB 时断开（只在合并时生效，单次粘贴不受限），保证一次 undo 的耗时有界。
+- [x] **Q-T8-3 撤销/重做后的光标位置**：
+  - undo 恢复到编辑前光标，redo 放在重做文本末尾。
+- [x] **Q-T8-4 撤销/重做 UI 接线归属**：
+  - 本任务只做 Rust + FFI + Kotlin 桥接/输入层；`MainScreen` 的 Undo/Redo 按钮与快捷键由 T-0013 或新建 T-0028 在 A12 前接线（含按钮 enable 状态、撤销后 `updateSelection`、真机验证）。
 
 ## Ready（M1）
 
 这些任务字段完整，但部分依赖待确认项，实际领取前请先确认对应 Q 项。
 
 - [x] **T-0027 启动即编辑 untitled.txt（输入法可用）**
-  - 任务单 `T-0027-untitled-editor.md` Reviewed
+  - 任务单 `T-0027-untitled-editor.md` - Reviewed
 
 - [x] **T-0007 文本缓冲区核心（rope 替换 M1.0 临时 String）** — Reviewed（`feat/m1-buffer-rope`；自动化检查通过，V9 真机回归与 V10 依赖审批待人类）
-  - 任务单 `T-0007-text-buffer.md` Reviewed
+  - 任务单 `T-0007-text-buffer.md` - Reviewed
 
 - [x] **T-0009 编码与换行检测（codec）**
-  - 任务单 `T-0009-codec.md` Reviewed（`feat/m1-codec`）
+  - 任务单 `T-0009-codec.md` - Reviewed（`feat/m1-codec`）
 
 - [x] **T-0010 原子保存（失败原子性）**
-  - 任务单 `T-0010-atomic-save.md` Reviewed（`feat/m1-atomic-save`）
+  - 任务单 `T-0010-atomic-save.md` - Reviewed（`feat/m1-atomic-save`）
 
 - [ ] **T-0008 撤销/重做与操作合并**（依赖 T-0007，Q9、Q15）
-  - 任务单 `T-0008-undo-redo.md`，待确认 Q-T8-1..4）
+  - 任务单 `T-0008-undo-redo.md` - In Progress（`feat/m1-t8-undo-redo`，负责人 deepseek-v4p1-flash-1017）
   - 验收：A5 的 proptest 通过；500 ms 内连续插入合并为一步；换行断开合并。
 
 ## Backlog

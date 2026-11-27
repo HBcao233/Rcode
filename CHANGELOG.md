@@ -78,3 +78,31 @@ All notable changes are documented here. Format follows Keep a Changelog.
 
 ### Added
 - Added bottom action bar ui.
+
+### T-0008 (undo/redo grouping)
+- Added `rcode-buffer::history`: `History` and `UndoGroup`. Undo/redo replays one
+  group as a single rope replacement; a failed replay leaves the text and both
+  stacks unchanged. Consecutive inserts/deletes merge within a 500 ms window when
+  the caret did not jump and no newline is involved; a merged group is capped at
+  64 KiB, while one paste may exceed it. Replacing a range is always its own step.
+  The total text bytes of undo + redo are capped at 64 MiB by truncating the oldest
+  groups, always keeping the newest one (Q9, Q15).
+- Added IME composition boundaries: `begin_composition` / `end_composition` group
+  an entire pinyin sequence (including the final CJK commit) into one undo step;
+  a cancelled composition leaves no step.
+- Added `EditorSession` exports `undo`, `redo`, `can_undo`, `can_redo`,
+  `clear_history`, `begin_composition` and `end_composition`. Undo restores the
+  caret recorded before the group (Q-T8-3); redo puts it just past the redone text.
+  `undo`/`redo` return `None` when there is nothing to do and do not change the
+  version.
+- Added A5 property tests (`prop_undo`, 1000 cases), a history grouping property
+  test (`prop_history`) and Criterion benchmarks for recording, single-character
+  undo/redo and undoing a 64 KiB group on a 10 MB document.
+- Changed `EditorInputHandler` to open a composition on `setComposingText` and to
+  end it after `commitText` / `deleteSurroundingText` (rather than before): ending
+  first split a committed pinyin word into two undo steps. Arrow keys and taps now
+  end an active composition. `FakeEditorSession` mirrors the new API for JVM tests.
+- Added Kotlin/FFI instrumented tests for undo/redo, composition grouping and
+  `clearHistory`; JVM tests cover the pinyin sequence, cancelled composition and
+  normal undo/redo. UI wiring of the Undo/Redo buttons remains out of scope
+  (Q-T8-4, T-0028).
