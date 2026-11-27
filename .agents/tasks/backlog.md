@@ -47,7 +47,7 @@
 ### 编辑器视图
 
 - [ ] **T-0014 Canvas 可见行渲染**（依赖已满足：T-0011、T-0012、T-0013 均 Reviewed）
-  - 任务单 `T-0014-canvas-line-rendering.md` - Ready（2026-11-27 按已完成的打开/保存实现重基线；Q-T14-4/6 已确定，Q-T14-1/2/3/5/7 待人类确认）
+  - 任务单 `T-0014-canvas-line-rendering.md` - Review（实现完成，JVM/构建/lint 通过；仪器与真机用例待人类补测）
   - 范围：自定义 Canvas 只绘制可见行；行布局缓存按版本号失效；视口 + 预取一屏。
   - 验收：10 MB 文件可滚动；A1 首屏 < 500 ms 的初版测量结果已记录。
   - 相关 skill：editor-rendering、perf-benchmark

@@ -207,3 +207,32 @@ All notable changes are documented here. Format follows Keep a Changelog.
   outcome) and instrumented tests for A6 through the production chain
   (`DocumentIo.open` → `EditorSession.open` → `encode` → `AtomicDocumentSaver`) plus
   A7 through the view model and `adopt` on a device.
+
+### T-0014 (canvas line rendering: layout cache, prefetch, first-frame measurement)
+- Added `editor/EditorLineLayout.kt`: `LaidOutLine`, `LineLayoutBuilder`, `LineMeasurer`
+  (`PaintLineMeasurer` in production) and `EditorLineLayoutCache`. Layout is pure math
+  with an injected measurer, so Tab expansion, CJK, surrogate pairs and the long-line
+  window are covered by JVM tests without an Android framework. Tabs expand to four
+  spaces (Q-T14-3); every UTF-16 boundary gets an x offset, so the caret and composing
+  underline are lookups instead of `measureText` calls from the line start.
+- Added the layout cache keyed by `(documentId, version, lineIndex, fontConfig)` with
+  `max(3 × visible rows, 256)` least-recently-used entries (Q-T14-1). `showDocument`
+  clears it when the document id changes, `onSizeChanged` rebuilds it because the
+  measured x window changed, and saving (T-0013) does not touch it: the version and
+  the document id stay the same, so no relayout happens.
+- Changed `EditorView.refreshViewport()` to fetch one viewport call covering the
+  visible rows plus one screen above and below (Q-T14-2, capped at 10000 lines) and to
+  lay out only those rows; `onDraw` walks the visible rows out of the cached
+  `LaidOutLine`s, performs no FFI calls and allocates nothing.
+- Added long-line protection (Q-T14-5): layout stops once the measured width passes
+  the visible window, so a 1 MB single line costs the same as a 100 KB one; the rest of
+  the line is not measured or drawn, which is the structure T-0015's horizontal scroll
+  reuses.
+- Added JVM tests for the layout math (Tab, wide characters, surrogate pairs, empty
+  lines, truncation, window-bounded measurement) and the cache (hit, version/document/
+  font invalidation, LRU eviction, capacity), plus instrumented tests that measure the
+  10 MB `open` / first layout / first draw first-frame timings (A1 first data point),
+  draw through 200 adjacent viewports while asserting `onDraw` calls no session method,
+  and check that opening another document drops the cached layouts.
+- Changed: the previous "one extra line" prefetch and the `RenderedLine` wrapper are
+  gone; prefetch screens are laid out but never painted.

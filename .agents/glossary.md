@@ -34,6 +34,9 @@
 | 主导换行符（dominant line ending） | 文档中占比最多的换行形式，并列时取最先出现的形式；无换行时为 LF。混合换行的文件保存时统一为它（Q-T9-2） |
 | DocumentFormat | codec 输出的保存格式：是否带 BOM + 单一换行形式；新建文件为无 BOM + LF |
 | 批量取行 | 一次 FFI 调用返回整屏行（`viewport(first_line, max_lines)`），含版本号、行数、行首字节偏移、行文本与光标；禁止逐行/逐字符调用（T-0011） |
+| 行布局（LaidOutLine） | 某一文档版本的某一行怎么画：Tab 展开后的绘制文本、每个 UTF-16 边界的 x 偏移、行宽、是否因可见窗口被截断（T-0014） |
+| 布局缓存键 | `(document_id, version, line_index, font_config)`；文档 id 来自 `showDocument`，字体变化或视图宽度变化整体失效（T-0014） |
+| 预取 | 可见行上下各一屏的行：随同一次 `viewport` 取回并提前布局，但不绘制 |
 | 文档句柄（document key） | 当前打开文件的 Kotlin 侧标识：`DocumentKey`（SAF URI 字符串）+ 显示名 + `SavableDocument` + `canWrite` + 打开时的版本。Kotlin 只保存这些，不保存全文（T-0012） |
 | 脏状态（dirty） | 会话版本与“最近一次成功保存的版本”不一致：`session.version() != lastSavedVersion`，打开成功时 `lastSavedVersion = opened.version`，保存成功时置为 `encoded.version`。标题后缀 `*` 据此显示（Q-T12-4、Q-T13-5） |
 | 保存版本（saved version） | 最近一次**成功**保存的 `EncodedDocument.version`；打开文件时初始化为 `open` 返回的版本。只用于比较，不解析文本 |
