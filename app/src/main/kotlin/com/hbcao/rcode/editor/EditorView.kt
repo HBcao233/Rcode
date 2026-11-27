@@ -59,18 +59,34 @@ class EditorView(
     private val caretWidth: Float = dp(2f)
     private val caretInset: Float = dp(1f)
 
+    /** Measures advances once per text range; shared by every line of this view. */
+    private val layoutBuilder = LineLayoutBuilder(PaintLineMeasurer(textPaint))
+
+    /** Laid-out lines for the current document/version/font; see [EditorLineLayoutCache]. */
+    private var layoutCache = EditorLineLayoutCache(layoutBuilder, EditorLineLayoutCache.capacityFor(1))
+
     /** First line currently drawn at the top of the viewport. */
     private var firstLine: Int = 0
 
-    /** Document shown by this view; a change resets the viewport (T-0012). */
+    /** Number of fully visible rows; the prefetch window is one screen on each side. */
+    private var visibleRows: Int = 1
+
+    /** Line index of `laidOutLines.first()`; lines before it are prefetch, not drawn. */
+    private var layoutFirstLine: Int = 0
+
+    /** Document shown by this view; a change resets the viewport and drops layouts (T-0012). */
     private var documentId: Long = 0
 
     private var reportedVersion: Long = -1
     private var firstViewportStartedNanos: Long = 0
 
-    private var renderedLines: List<RenderedLine> = emptyList()
+    private var laidOutLines: List<LaidOutLine> = emptyList()
     private var caretRect: RectF? = null
     private var composingUnderlines: List<ComposingUnderline> = emptyList()
+
+    /** Everything a line layout depends on besides the text (cache key part, T-0014). */
+    private val fontConfig: FontConfig
+        get() = FontConfig(System.identityHashCode(textPaint.typeface), textPaint.textSize, lineHeight)
 
     init {
         isFocusable = true
@@ -302,51 +318,54 @@ class EditorView(
         oldHeight: Int,
     ) {
         super.onSizeChanged(width, height, oldWidth, oldHeight)
+        // A size change alters the x window every line was laid out for, and the number
+        // of rows the cache has to cover, so start with an empty cache (T-0014).
+        visibleRows = visibleRowsFor(height)
+        layoutCache = EditorLineLayoutCache(layoutBuilder, EditorLineLayoutCache.capacityFor(visibleRows))
         refreshViewport()
     }
 
     /**
      * Reloads the visible lines from the Rust session. Called after edits and size
      * changes, never from `onDraw`.
+     *
+     * One `viewport` call fetches the visible rows plus one prefetch screen above and
+     * below (Q-T14-2); each row is laid out once per document version and font (T-0014).
      */
     fun refreshViewport() {
         if (width <= 0 || height <= 0) return
         val contentHeight = height - paddingTop - paddingBottom
         if (contentHeight <= 0) return
-        val visibleRows = (contentHeight.toFloat() / lineHeight).toInt().coerceAtLeast(1)
+        val rows = visibleRowsFor(height)
+        ensureCacheCapacity(rows)
+        visibleRows = rows
 
         val cursor = session.cursor()
         if (cursor.line < firstLine) {
             firstLine = cursor.line
-        } else if (cursor.line >= firstLine + visibleRows) {
-            firstLine = cursor.line - visibleRows + 1
+        } else if (cursor.line >= firstLine + rows) {
+            firstLine = cursor.line - rows + 1
         }
         firstLine = firstLine.coerceAtLeast(0)
 
-        // One extra line below the viewport prefetches the next scroll position.
-        val viewport = session.viewport(firstLine, visibleRows + 1)
-        firstLine = viewport.firstLine
+        val requestFirst = (firstLine - rows).coerceAtLeast(0)
+        val viewport = session.viewport(requestFirst, minOf(rows * SCREENS_LAID_OUT, MAX_VIEWPORT_LINES))
+        firstLine = firstLine.coerceAtMost((viewport.lineCount - 1).coerceAtLeast(0))
 
         if (viewport.version != reportedVersion) {
             reportedVersion = viewport.version
             onVersionChanged(viewport.version)
         }
 
-        val left = paddingLeft.toFloat()
-        val lines =
-            viewport.lines.map { line ->
-                val byteLength = Utf8Offsets.utf8Length(line.text)
-                RenderedLine(
-                    index = line.index,
-                    startByte = line.startByte,
-                    endByte = line.startByte + byteLength,
-                    text = line.text,
-                    top = paddingTop + (line.index - viewport.firstLine) * lineHeight,
-                )
-            }
-        renderedLines = lines
-        caretRect = caretRect(viewport, lines, left)
-        composingUnderlines = composingUnderlines(lines, left)
+        // `maxWidthPx` bounds the layout work of a very long line (V6, Q-T14-5); the
+        // extra line height keeps the character under the right edge measurable.
+        val maxWidthPx = (width - paddingLeft - paddingRight).toFloat() + lineHeight
+        val font = fontConfig
+        laidOutLines =
+            viewport.lines.map { line -> layoutCache.layoutFor(documentId, viewport.version, font, line, maxWidthPx) }
+        layoutFirstLine = viewport.firstLine
+        caretRect = caretRect(viewport)
+        composingUnderlines = composingUnderlines(viewport)
         invalidate()
 
         if (firstViewportStartedNanos != 0L) {
@@ -356,9 +375,29 @@ class EditorView(
         }
     }
 
+    private fun visibleRowsFor(height: Int): Int = ((height - paddingTop - paddingBottom).toFloat() / lineHeight).toInt().coerceAtLeast(1)
+
+    private fun ensureCacheCapacity(rows: Int) {
+        val needed = EditorLineLayoutCache.capacityFor(rows)
+        if (layoutCache.capacity < needed) {
+            layoutCache = EditorLineLayoutCache(layoutBuilder, needed)
+        }
+    }
+
     /** Line drawn at the top of the viewport; `0` after a document is opened (V9). */
     val firstVisibleLine: Int
         get() = firstLine
+
+    /**
+     * Test hook (T-0014): drawable text of [lineIndex] when it is currently drawn.
+     *
+     * Returns `null` for lines outside the visible rows, including prefetch lines above
+     * or below the viewport, so tests can assert both the drawn content and the range.
+     */
+    internal fun visibleTextAt(lineIndex: Int): String? {
+        if (lineIndex < firstLine || lineIndex >= firstLine + visibleRows) return null
+        return layoutAt(lineIndex)?.displayText
+    }
 
     /**
      * Resets rendering and the IME after the session replaced its document (T-0012).
@@ -376,72 +415,92 @@ class EditorView(
 
     /**
      * Points this view at the document identified by [documentId], resetting the
-     * viewport when it differs from the previous one (called from `MainScreen`).
+     * viewport and the layout cache when it differs from the previous one (T-0012).
+     *
+     * A save-as keeps the same id (T-0013): the text did not change, so both the
+     * viewport and the cached layouts stay valid.
      */
     fun showDocument(documentId: Long) {
         if (this.documentId == documentId) return
         this.documentId = documentId
+        layoutCache.invalidateAll()
         onDocumentOpened()
     }
 
-    private fun caretRect(
-        viewport: EditorViewportSnapshot,
-        lines: List<RenderedLine>,
-        left: Float,
-    ): RectF? {
-        val line = lines.firstOrNull { it.index == viewport.cursor.line } ?: return null
-        val prefixEnd = Utf8Offsets.byteToUtf16Index(line.text, viewport.cursor.columnBytes)
-        val x = left + textPaint.measureText(line.text, 0, prefixEnd)
+    /**
+     * Drops every cached line layout and redraws; T-0021 calls this after a font change.
+     *
+     * The cache key already contains the [FontConfig], so a new font would also miss;
+     * clearing here releases the old geometry instead of waiting for eviction.
+     */
+    fun invalidateAll() {
+        layoutCache.invalidateAll()
+        refreshViewport()
+    }
+
+    private fun caretRect(viewport: EditorViewportSnapshot): RectF? {
+        val line = layoutAt(viewport.cursor.line) ?: return null
+        val textIndex = Utf8Offsets.byteToUtf16Index(line.text, viewport.cursor.columnBytes)
+        val x = paddingLeft + line.xForTextIndex(textIndex)
+        val top = lineTop(line.index)
         return RectF(
             x - caretInset,
-            line.top,
+            top,
             x - caretInset + caretWidth,
-            line.top + lineHeight,
+            top + lineHeight,
         )
     }
 
-    private fun composingUnderlines(
-        lines: List<RenderedLine>,
-        left: Float,
-    ): List<ComposingUnderline> {
+    /** Cached layout of [lineIndex], or `null` when it is outside the prefetch window. */
+    private fun layoutAt(lineIndex: Int): LaidOutLine? = laidOutLines.getOrNull(lineIndex - layoutFirstLine)
+
+    private fun lineTop(lineIndex: Int): Float = paddingTop + (lineIndex - firstLine) * lineHeight
+
+    private fun composingUnderlines(viewport: EditorViewportSnapshot): List<ComposingUnderline> {
         val start = inputHandler.composingStartByte
         val end = inputHandler.composingEndByte
         if (start < 0 || end <= start) return emptyList()
-        return lines.mapNotNull { line ->
-            val spanStart = maxOf(start, line.startByte)
-            val spanEnd = minOf(end, line.endByte)
-            if (spanStart >= spanEnd) return@mapNotNull null
-            val prefixEnd = Utf8Offsets.byteToUtf16Index(line.text, spanStart - line.startByte)
-            val spanEndIndex = Utf8Offsets.byteToUtf16Index(line.text, spanEnd - line.startByte)
-            ComposingUnderline(
-                startX = left + textPaint.measureText(line.text, 0, prefixEnd),
-                endX = left + textPaint.measureText(line.text, 0, spanEndIndex),
-                y = line.top + lineHeight - dp(1f),
-            )
+        val result = ArrayList<ComposingUnderline>(1)
+        val slices = viewport.lines
+        for (position in slices.indices) {
+            val slice = slices[position]
+            // Lines are contiguous and the terminator is one byte, so the next line's
+            // startByte - 1 is the last byte of this line.
+            val lineEndByte = if (position + 1 < slices.size) slices[position + 1].startByte - 1 else Int.MAX_VALUE
+            if (end <= slice.startByte || start > lineEndByte) continue
+            val line = layoutAt(slice.index) ?: continue
+            val spanStart = maxOf(start, slice.startByte) - slice.startByte
+            val spanEnd = minOf(end, lineEndByte) - slice.startByte
+            val startIndex = Utf8Offsets.byteToUtf16Index(line.text, spanStart)
+            val endIndex = Utf8Offsets.byteToUtf16Index(line.text, spanEnd)
+            if (endIndex <= startIndex) continue
+            result +=
+                ComposingUnderline(
+                    startX = paddingLeft + line.xForTextIndex(startIndex),
+                    endX = paddingLeft + line.xForTextIndex(endIndex),
+                    y = lineTop(line.index) + lineHeight - dp(1f),
+                )
         }
+        return result
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         canvas.drawColor(colors.background)
         val baselineOffset = -textPaint.fontMetrics.ascent
-        for (line in renderedLines) {
-            if (line.text.isEmpty()) continue
-            canvas.drawText(line.text, paddingLeft.toFloat(), line.top + baselineOffset, textPaint)
+        // Only fully visible rows are drawn; prefetch lines are laid out, not painted.
+        val start = maxOf(firstLine, layoutFirstLine)
+        val endExclusive = minOf(firstLine + visibleRows, layoutFirstLine + laidOutLines.size)
+        for (lineIndex in start until endExclusive) {
+            val line = laidOutLines[lineIndex - layoutFirstLine]
+            if (line.displayText.isEmpty()) continue
+            canvas.drawText(line.displayText, paddingLeft.toFloat(), lineTop(lineIndex) + baselineOffset, textPaint)
         }
         for (underline in composingUnderlines) {
             canvas.drawLine(underline.startX, underline.y, underline.endX, underline.y, composingPaint)
         }
         caretRect?.let { canvas.drawRect(it, caretPaint) }
     }
-
-    private class RenderedLine(
-        val index: Int,
-        val startByte: Int,
-        val endByte: Int,
-        val text: String,
-        val top: Float,
-    )
 
     private class ComposingUnderline(
         val startX: Float,
@@ -460,5 +519,11 @@ class EditorView(
         const val MAX_CONTEXT_UNITS = 65_536
         const val LOG_TAG = "rcode-editor"
         const val NANOS_PER_MILLI = 1_000_000L
+
+        /** Visible + one prefetch screen above and below (Q-T14-2). */
+        const val SCREENS_LAID_OUT = 3
+
+        /** Mirrors the Rust `viewport` clamp (T-0011) so one call never asks for more. */
+        const val MAX_VIEWPORT_LINES = 10_000
     }
 }
