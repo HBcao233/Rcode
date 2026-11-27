@@ -284,7 +284,7 @@ bash ./scripts/build-core.sh              # 重新生成 Kotlin 绑定，检查 
 ## 交接记录
 
 - 日期：2026-11-27
-- 分支与提交：`feat/m1-t11-edit-session`；`44c08ab feat(buffer): add whole-document reset with a version bump`、`d9f4607 feat(ffi): open a document with codec decoding and stored format`（Kotlin、文档与任务单在随后的提交中）。
+- 分支与提交：`feat/m1-t11-edit-session`；`44c08ab feat(buffer): add whole-document reset with a version bump`、`d9f4607 feat(ffi): open a document with codec decoding and stored format`、`65986af feat(editor): open documents through the session facade`、`80f8d32 docs: describe the open session and batch viewport contract`（本次交接记录更新在随后一个 docs 提交中，`HEAD` 以 `git log` 为准）。
 - 已完成：
   - Rust：`TextBuffer::reset`（V1）；`EditorSession::open`/`format`、`OpenedDocument`、`UnsupportedEncodingKind`、`EditorError::{NotUtf8, UnsupportedEncoding}` 与 `From<CodecError>`（V2–V5）；`Doc.format` 存储解码格式，`new()` 为 `DocumentFormat::new_file()`；打开失败原子性由“锁外解码”保证。
   - 基准：`core/crates/rcode-ffi/benches/open.rs` + `[[bench]] name = "open"`（V10）。
