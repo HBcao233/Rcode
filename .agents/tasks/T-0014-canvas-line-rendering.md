@@ -4,25 +4,33 @@
 - **里程碑**：M1（A1 的初版测量、A2/A3 的渲染基础；G2、G3）
 - **类型**：feat
 - **状态**：Ready
-- **分支**：`feat/m1-t14-canvas-rendering`（领取时创建）
+- **分支**：`feat/m1-t14-canvas-rendering`（已创建；本次任务单更新提交于此）
 - **负责人**：未领取
 - **涉及模块**：editor（`EditorView`、新增行布局/缓存类）、ui（`AndroidView` 宿主，通常不改）、ffi（只读 `viewport`，不改签名）；不涉及 rust-core / uniffi-bridge（本任务不新增 FFI）
 - **相关 skill**：editor-rendering、perf-benchmark、testing-qa；改宿主时加 kotlin-compose-ui；不涉及 IME 状态机，不需要重读 uniffi-bridge
 
 ## 背景
 
-现状（M1.0 + T-0011 完成后）：
+> 2026-11-27 重基线：T-0011、T-0012、T-0013 均已 Reviewed（`feat/m1-t11-edit-session`、`feat/m1-t12-saf-open`、`feat/m1-t13-save-ui`），下列现状描述已按当前代码（`EditorView`、`MainViewModel`、`DocumentUiState`）核对。
+
+现状（M1.0 + T-0011 + T-0012 + T-0013 完成后）：
 
 1. **每次刷新都重建全部可见行**：`app/src/main/kotlin/com/hbcao/rcode/editor/EditorView.kt` 的 `refreshViewport()` 每次都向 Rust 取一次 `viewport(firstLine, visibleRows + 1)`，并把每个行文本包成新的 `RenderedLine`；没有按版本号的布局缓存，也没有“只重排变化行”的能力。编辑一个字符也会重排整屏。
 2. **预取只有 1 行**：注释写的是“one extra line below the viewport”，与 `architecture.md` §3.3 的“视口 + 预取一屏”不符。
 3. **没有可测试的布局层**：`caretRect()`、`composingUnderlines()` 直接在 View 里用 `textPaint.measureText(line.text, 0, prefixEnd)` 从头量整行；宽字符、emoji 代理对、Tab 只能靠 `Paint` 自然处理。Tab 没有显式制表位（`Canvas.drawText` 对 `\t` 的表现由字体决定），`editor-rendering` skill 要求固定 4 个空格宽。
-4. **缓存键缺 `document_id` / `font_config`**：`editor-rendering` skill 规定的键是 `(document_id, version, line_index, font_config)`，现在一个都没有；T-0021 要改字号，T-0012 要换文档，届时必须能整体失效。
+4. **缓存键缺 `document_id` / `font_config`**：`editor-rendering` skill 规定的键是 `(document_id, version, line_index, font_config)`，现在一个都没有。文档标识已经可用但还没用上：T-0012 的 `EditorView.showDocument(documentId)` 在每次成功 `open` 后被 `MainScreen` 调用（`DocumentUiState.Opened.documentId`，未命名文档为 `0`，每次打开 +1），并用 `onDocumentOpened()` 重置视口与 `restartInput`；T-0013 的“另存为”刻意保持同一个 `documentId`（文本不变，不能重置视口）。字号/字体变化要到 T-0021，届时必须能整体失效。
 5. **长行无保护**：`viewport` 按 Q-T11-5 返回整行文本；一行 10 MB 的极端文件会让“每次刷新量整行”变成 O(行长度) 的 UI 线程工作。Q-T11-5 明确把该风险留给 T-0014/T-0015，由 T-0014 先提供按 x 窗口布局/绘制的结构，T-0015 再加横向滚动。
-6. **没有 A1 的初版数据**：`roadmap.md` A1 要求“10 MB 从用户选定文件到首屏绘制完成 < 500 ms”，T-0025 才做正式 Macrobenchmark；T-0014 需要先用合成 10 MB 数据记录 `open → 首屏布局 → 首帧绘制` 的初版数值，否则 A1 的差距会拖到 M1 末尾才暴露。
+6. **没有 A1 的初版数据（只有一行日志）**：`roadmap.md` A1 要求“10 MB 从用户选定文件到首屏绘制完成 < 500 ms”，T-0025 才做正式 Macrobenchmark；T-0012 在 `onDocumentOpened()` → `refreshViewport()` 里加了一行 `Log.i(LOG_TAG, "first viewport after open: …ms")`，但那只是“首次取行 + 布局”的日志，没有把 `open`、首屏布局、首帧 `draw` 分开计时，也没有 10 MB 数据。T-0014 需要先用合成 10 MB 数据记录三段初版数值，否则 A1 的差距会拖到 M1 末尾才暴露。
+
+T-0012/T-0013 已确立、本任务必须保持的渲染侧约定：
+
+- 文档替换后由 `showDocument(documentId)` 触发一次视口重置；`documentId` 是 Kotlin 侧计数器，不经过 FFI（与 `architecture.md` §3.3 的“本任务不把文档 id 暴露到 FFI”一致）。
+- `EditorView` 只在版本变化时回调 `onVersionChanged(version)`，`MainViewModel` 用它计算 `dirty`（T-0013 改为与“最近保存版本”比较）；**保存成功不改变版本、也不回调**，因此本任务不能让保存或 `dirty` 变化触发重排。
+- 打开文件链路（`DocumentIo.open` → `session.open` → `showDocument`）和保存链路（`encode` → `AtomicDocumentSaver`）已经就绪，A1 测量可以直接复用 `EditorSession.open(bytes)`，不需要 SAF。
 
 本任务不产生新的用户可见功能（没有手势、没有行号、没有高亮），它把“可见行渲染”从 M1.0 的能跑版本变成有缓存、可测量、可被 T-0015/T-0020/T-0021 复用的结构。
 
-关联：`goals.md` G2（大文件性能）、G3（核心状态在 Rust）；`roadmap.md` §1.3 A1、A2；`architecture.md` §3.1（Kotlin 不缓存全文）、§3.3（行布局缓存按版本号失效、只绘制可见行）、§3.4（UI 线程 4 ms 预算）；`decisions/0002-editor-ime-androidview.md`（自定义 View + Canvas）；`T-0011-edit-session.md`（`viewport` 批量协议与版本单调）；`T-0015-cursor-and-scroll.md`（滚动手势、点击定位，依赖本任务）；`T-0020`（高亮接入）、`T-0021`（软换行/行号/字号）、`T-0025`（正式 A1/A2/A3 基准）。
+关联：`goals.md` G2（大文件性能）、G3（核心状态在 Rust）；`roadmap.md` §1.3 A1、A2；`architecture.md` §3.1（Kotlin 不缓存全文）、§3.3（行布局缓存按版本号失效、只绘制可见行）、§3.4（UI 线程 4 ms 预算）；`decisions/0002-editor-ime-androidview.md`（自定义 View + Canvas）；`T-0011-edit-session.md`（`viewport` 批量协议与版本单调）；`T-0012-saf-open.md`（`showDocument(documentId)`、视口重置、首屏日志）；`T-0013-save-ui.md`（另存为不改变 `documentId`/版本，缓存必须继续有效）；`T-0015-cursor-and-scroll.md`（滚动手势、点击定位，依赖本任务）；`T-0020`（高亮接入）、`T-0021`（软换行/行号/字号）、`T-0025`（正式 A1/A2/A3 基准）。
 
 ## 术语与单位
 
@@ -32,7 +40,7 @@
 | 布局缓存（layout cache） | 按 `(document_id, version, line_index, font_config)` 索引的行布局；版本变化即失效 |
 | 预取（prefetch） | 除可见行外额外布局的行；M1 目标为视口上下各一屏，总量不超过 `MAX_VIEWPORT_LINES` |
 | 首屏（first frame） | 文档内容写入会话后，编辑器第一次把可见行与光标画到屏幕上的那一帧 |
-| 文档 id（document_id） | Kotlin 视图层为“当前正在显示的那个文档”生成的标识；M1 单文档会话下每个 `EditorView`/会话固定一个，换文档（T-0012 的 `open`）才更换 |
+| 文档 id（document_id） | Kotlin 视图层为“当前正在显示的那个文档”的标识。已由 T-0012 提供：`DocumentUiState.Opened.documentId`，未命名文档为 `0`，每次成功 `open` 后 +1；T-0013 的另存为不改变它（文本未变）。不经过 FFI（T-0011 约定） |
 
 偏移继续沿用 T-0007/T-0011：**UTF-8 字节偏移**，行号从 0 开始，行文本不含终止符，版本号 `u64`。
 
@@ -82,9 +90,9 @@ internal class EditorLineLayoutCache(private val capacity: Int) {
 }
 ```
 
-- 键：`documentId + version + fontConfig + line.index`。`documentId` 由 `EditorView` 持有（M1 单文档：构造时生成一个递增 id；T-0012 的 `open` 成功后调用 `onDocumentReplaced()` 生成新 id）。
+- 键：`documentId + version + fontConfig + line.index`。`documentId` 由 `EditorView.showDocument(documentId)` 传入（T-0012 已实现：`MainScreen` 在 `update` 里调用），即 `DocumentUiState.Opened.documentId`，未命名文档为 `0`；`showDocument` 在 id 变化时已经调用 `onDocumentOpened()`，本任务在该路径上追加 `cache.clear()`（否则打开第二个文件后，旧文档同版本号的行会被错误复用）。T-0013 的另存为不改变 id 也不改变版本，因此不会也不应该清缓存。
 - 版本变化时的处理：**不整体清空**，而是按版本号判断。`viewport` 返回的 `version` 与缓存条目的版本不同时，对**请求到的行**重新布局；未请求的行即使还在缓存里也不会被使用（下次请求时自然重排）。这样编辑一行的代价与该屏行数成正比，而不是与整个缓存成正比。
-- `fontConfig` 变化（`Typeface`、`textSize`、`tabWidth`、`lineHeight`）时直接弃用整个缓存；T-0021 改字号时调用 `invalidateAll()`。
+- `fontConfig` 变化（`Typeface`、`textSize`、`tabWidth`、`lineHeight`）时直接弃用整个缓存；T-0021 改字号时调用 `invalidateAll()`。当前字体是 `EditorView` 里的常量（`Typeface.MONOSPACE`、`DEFAULT_TEXT_SIZE_SP = 14f`、`lineHeight = textPaint.fontSpacing`），本任务把它们收进一个不可变 `FontConfig`（值相等即命中），不引入设置 UI（Q8 的字号范围留给 T-0021）。
 - 容量：`max(3 × 可见行数, 256)` 行，超出按插入顺序淘汰最旧条目（LRU 可后续再加）。任务单不引入第三方 LRU 依赖。
 
 ### 3. 视口范围与预取（Q-T14-2）
@@ -103,7 +111,8 @@ internal class EditorLineLayoutCache(private val capacity: Int) {
 
 ### 5. A1 初版测量（Q-T14-4）
 
-- 用与 `rcode-fs`/`rcode-ffi` 基准相同的合成数据形状（约 70% ASCII、25% CJK、5% emoji，平均行长 80 字节）在仪器测试中生成 10 MB 文本，调用 `session.open(bytes)`，然后 `view.measure/layout` + `view.draw(Canvas(Bitmap))`。
+- 用与 `rcode-fs`/`rcode-ffi` 基准相同的合成数据形状（约 70% ASCII、25% CJK、5% emoji，平均行长 80 字节）在仪器测试中生成 10 MB 文本，调用 `session.open(bytes)`，然后 `view.measure/layout` + `view.draw(Canvas(Bitmap))`。T-0012 的打开链路已就绪，不需要等 SAF；若设备可用，可再补一条经 `DocumentIo` 读取字节的端到端数值作为对照。
+- 现有 `onDocumentOpened()` → `refreshViewport()` 里的 `Log.i(LOG_TAG, "first viewport after open: …ms")`（T-0012 遗留）只是“首次取行 + 布局”的粗粒度日志；本次把它拆成 `open`、首次 `viewport` + 布局、首帧 `draw` 三段并保留该日志（或改为同一来源），不要出现两套口径。
 - 记录三段耗时（`System.nanoTime`）：`open`、首次 `viewport` + 布局、首帧 `draw`；报告三段之和与机型。
 - 不做硬门槛（A1 的正式判定在 T-0025），但若合计明显超过 500 ms，要在交接记录中给出瓶颈与后续建议。
 - 不允许在测试里用 `@Ignore` 跳过；无设备时记录“未运行”及原因（同 T-0007/T-0010）。
@@ -119,7 +128,7 @@ internal class EditorLineLayoutCache(private val capacity: Int) {
 ### 包含
 
 - 新增行布局/缓存类（`EditorLineLayout.kt`，纯 Kotlin + 注入的测量函数）与 `LineLayoutBuilder`。
-- `EditorView` 改造：`refreshViewport()` 使用缓存与“上下各一屏”预取；`onDraw` 按缓存绘制可见行；光标/组合下划线改用 `xOffsets`；`documentId` 与 `FontConfig` 进入缓存键；`invalidateAll()` 供 T-0021 使用。
+- `EditorView` 改造：`refreshViewport()` 使用缓存与“上下各一屏”预取；`onDraw` 按缓存绘制可见行；光标/组合下划线改用 `xOffsets`；`documentId`（来自 `showDocument`）与 `FontConfig` 进入缓存键；`showDocument` 换文档时清缓存；`invalidateAll()` 供 T-0021 使用。
 - Tab 制表位（4 个空格宽，Q-T14-3）。
 - 长行按 x 窗口布局/绘制（`scrollX` 恒 0 时也只量可见窗口）。
 - 仪器测试：合成 10 MB 首屏计时；200 个相邻视口位置的绘制正确性与耗时。
@@ -144,7 +153,7 @@ internal class EditorLineLayoutCache(private val capacity: Int) {
 ## 验收标准
 
 - [ ] **V1** 布局层与 Canvas 解耦：`LineLayoutBuilder` 可在 JVM 中用注入的测量函数测试；`EditorView` 不再直接 `measureText` 整行来定位光标。
-- [ ] **V2** 缓存键为 `(documentId, version, lineIndex, fontConfig)`；同一版本内重复刷新同一屏不重新布局（测试用计数器断言命中）；版本变化后请求到的行会重排；`invalidateAll()` 清空缓存。
+- [ ] **V2** 缓存键为 `(documentId, version, lineIndex, fontConfig)`；同一版本内重复刷新同一屏不重新布局（测试用计数器断言命中）；版本变化后请求到的行会重排；`invalidateAll()` 清空缓存；`showDocument` 换文档（id 变化）后不复用旧布局，而 T-0013 的保存/另存为（版本与 id 均不变）**不**触发重排。
 - [ ] **V3** 预取为“可见行上下各一屏”，总行数不超过 `MAX_VIEWPORT_LINES`；每次刷新只调用一次 `viewport`；`onDraw` 中无 FFI 调用、无每帧分配（代码检查 + 测试断言调用计数）。
 - [ ] **V4** 任意 `firstLine`（0、中间、末屏、空文档、行数不足一屏）时顶部行与行内容正确，末尾不越界。
 - [ ] **V5** Tab 展开为 4 个空格宽；CJK、emoji（代理对）、组合字符的字符边界 x 与光标位置正确（JVM 测试覆盖，含 Tab + CJK 混排）。
@@ -157,9 +166,9 @@ internal class EditorLineLayoutCache(private val capacity: Int) {
 
 ## 计划
 
-1. **基线**：读 `editor-rendering`/`perf-benchmark` skill、`EditorView`、`T-0011` 的 viewport 契约；跑 `cargo test --workspace` 与 `./gradlew :app:testDebugUnitTest` 确认基线；backlog 标 In Progress。
-2. **布局层（测试先行）**：写 `LineLayoutBuilder` 的 JVM 失败测试（Tab、CJK、emoji、空行、行宽），再实现；缓存类同样先写命中/失效/容量测试。
-3. **接入 `EditorView`**：缓存 + 预取 + 绘制改造；`documentId`/`FontConfig` 进入键；`invalidateAll()`。
+1. **基线**：读 `editor-rendering`/`perf-benchmark` skill、`EditorView`、`T-0011` 的 viewport 契约与 `T-0012` 的 `showDocument(documentId)`/`onDocumentOpened()`；跑 `cargo test --workspace` 与 `./gradlew :app:testDebugUnitTest` 确认基线；backlog 标 In Progress。
+2. **布局层（测试先行）**：写 `LineLayoutBuilder` 的 JVM 失败测试（Tab、CJK、emoji、空行、行宽），再实现；缓存类同样先写命中/失效/容量测试（含 `showDocument` 换文档与“保存后不重排”用例）。
+3. **接入 `EditorView`**：缓存 + 预取 + 绘制改造；`documentId`（`showDocument`）/`FontConfig` 进入键并清缓存；`invalidateAll()`。
 4. **长行窗口**：按 `scrollX..scrollX + 内容宽度` 限制布局与绘制；用 1 MB 单行测试固定行为。
 5. **仪器测试与测量**：10 MB 首屏三段计时、200 个视口位置绘制；记录数值。
 6. **文档与收尾**：architecture §3.3、CHANGELOG、任务单、backlog；跑完整 DoD 命令；按 `task-handoff` skill 写交接记录。
@@ -191,19 +200,19 @@ cd ..
   推荐：可见区上下各一屏，且总请求行数不超过 `MAX_VIEWPORT_LINES`；行数不足时自然截断。备选：只在下方预取一屏（滚动方向偏置，内存更省）。
 - [ ] **Q-T14-3 Tab 宽度**：
   推荐：固定 4 个空格宽（`tabWidth = 4 × space advance`，由 `Paint.measureText(" ")` 得到），与 `editor-rendering` skill 一致，暂不提供配置。备选：按 Tab 停位到下一个 `4 × space` 网格（与编辑器常见行为一致，但 Tab 后字符的 x 取决于列号，实现与测试稍复杂）。
-- [ ] **Q-T14-4 A1 初版测量用合成数据还是等 T-0012**：
-  推荐：先用合成 10 MB 字节测 `open + 首屏`，T-0025 再做 SAF 端到端；这样 T-0014 不阻塞在 T-0012。备选：等 T-0012 完成后一起测（数据更真实，但本任务无法收尾）。
+- [x] **Q-T14-4 A1 初版测量用合成数据还是等 T-0012**（已因 T-0012 完成而失效）：
+  T-0012 已 Reviewed，打开链路可直接复用：仍按推荐用合成 10 MB 字节调 `EditorSession.open` 测三段耗时，设备可用时再补一条经 `DocumentIo` 读取的端到端数值作对照；不再需要“等 T-0012”。
 - [ ] **Q-T14-5 长行窗口是否现在就做**：
   推荐：现在做（T-0014 提供按 x 窗口布局/绘制，`scrollX` 先恒为 0），因为 Q-T11-5 明确把“viewport 返回整行”的风险留在这里；备选：留到 T-0015 与横向滚动一起做（本任务先记录风险）。
-- [ ] **Q-T14-6 `document_id` 的来源**：
-  推荐：`EditorView` 持有递增 id，构造时生成；T-0012 `open` 成功后调用 `onDocumentReplaced()` 换新 id（T-0011 已约定不把文档 id 暴露到 FFI）。备选：只用 `version` 作键（单文档会话下够用，但 T-0021/未来多文档时语义不清）。
+- [x] **Q-T14-6 `document_id` 的来源**（已由 T-0012/T-0013 的实现确定）：
+  不新建 id 来源：直接用 `EditorView.showDocument(documentId)` 传入的 `DocumentUiState.Opened.documentId`（未命名 `0`，每次 `open` +1，T-0013 另存为不变）；`EditorView` 在该路径上清缓存即可，不新增 `onDocumentReplaced()`。
 - [ ] **Q-T14-7 grapheme cluster**：
   推荐：本任务与 M1.0、T-0015 一致，按 Unicode scalar 处理，组合 emoji 等作为已知限制记录；备选：在布局层就按 grapheme 分段（会影响光标与命中测试，应作为独立任务）。
 
 ## 阻塞
 
-- T-0011 目前为 Review（未合并到 `main`），T-0012 尚未领取；本任务在两者之后开工，避免基于会变动的 viewport/打开契约实现。
-- 真机仪器测试需要 Android 设备；当前 Termux 环境 `adb devices` 为空，届时按 T-0007/T-0010 的方式注明“未运行”并请人类补测。
+- 依赖均已完成：T-0011、T-0012、T-0013 已 Reviewed（2026-11-27），本任务可基于当前 `viewport`/`showDocument` 契约开工，不再有契约变动风险。
+- 真机仪器测试需要 Android 设备；当前 Termux 环境 `adb devices` 为空，届时按 T-0007/T-0010/T-0012 的方式注明“未运行”并请人类补测（T-0012/T-0013 也是这样处理的）。
 
 ## 交接记录
 
