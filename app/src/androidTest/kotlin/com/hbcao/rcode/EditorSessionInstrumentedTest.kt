@@ -3,13 +3,16 @@ package com.hbcao.rcode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.hbcao.rcode.bridge.UniffiEditorSession
 import com.hbcao.rcode.editor.DocumentFormat
+import com.hbcao.rcode.editor.DocumentOpenException
 import com.hbcao.rcode.editor.EditorInputHandler
 import com.hbcao.rcode.editor.LineEnding
+import com.hbcao.rcode.editor.UnsupportedEncodingKind
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -20,6 +23,8 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class EditorSessionInstrumentedTest {
+    private val utf8Bom = byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte())
+
     @Test
     fun editingSessionRoundTrip() {
         val session = UniffiEditorSession()
@@ -173,6 +178,150 @@ class EditorSessionInstrumentedTest {
             val afterEdit = session.encode(DocumentFormat(bom = false, lineEnding = LineEnding.LF))
             assertTrue(afterEdit.version > crlf.version)
             assertArrayEquals("a\nb\nlater".encodeToByteArray(), afterEdit.bytes)
+        } finally {
+            session.close()
+        }
+    }
+
+    @Test
+    fun openDecodesBomAndCrlfAndStoresTheFormat() {
+        val session = UniffiEditorSession()
+        try {
+            val before = session.version()
+            val bytes = utf8Bom + "alpha\r\nbeta\r\n".encodeToByteArray()
+
+            val opened = session.open(bytes)
+
+            assertTrue(opened.version > before)
+            assertEquals(opened.version, session.version())
+            assertEquals(3, opened.lineCount)
+            assertEquals(DocumentFormat(bom = true, lineEnding = LineEnding.CRLF), opened.format)
+            assertEquals(opened.format, session.format())
+            assertEquals(0, opened.cursor.byteOffset)
+            assertEquals(0, opened.cursor.line)
+            assertEquals(0, session.cursorUtf16Offset())
+            assertFalse(session.canUndo())
+            assertFalse(session.canRedo())
+
+            val viewport = session.viewport(0, 10)
+            assertEquals(opened.version, viewport.version)
+            assertEquals(listOf("alpha", "beta", ""), viewport.lines.map { it.text })
+            assertEquals(listOf(0, 6, 11), viewport.lines.map { it.startByte })
+            assertArrayEquals(bytes, session.encode(session.format()).bytes)
+        } finally {
+            session.close()
+        }
+    }
+
+    @Test
+    fun openThenEditUndoAndViewport() {
+        val session = UniffiEditorSession()
+        try {
+            val opened = session.open("one\ntwo\n".encodeToByteArray())
+            assertEquals(3, opened.lineCount)
+
+            session.moveCursor(4) // start of line 1
+            session.insertText("X")
+            val edited = session.version()
+            assertEquals("one\nXtwo\n", session.text())
+            assertEquals(5, session.cursor().byteOffset)
+
+            val undone = session.undo()
+            assertNotNull(undone)
+            assertTrue(undone!! > edited)
+            assertEquals("one\ntwo\n", session.text())
+            assertEquals(4, session.cursor().byteOffset)
+
+            val viewport = session.viewport(0, 10)
+            assertEquals(undone, viewport.version)
+            assertEquals(listOf("one", "two", ""), viewport.lines.map { it.text })
+            assertEquals(4, viewport.cursor.byteOffset)
+            assertEquals(1, viewport.cursor.line)
+        } finally {
+            session.close()
+        }
+    }
+
+    @Test
+    fun openDiscardsTheHistoryOfThePreviousDocument() {
+        val session = UniffiEditorSession()
+        try {
+            session.insertText("draft")
+            val draftVersion = session.version()
+            assertTrue(session.canUndo())
+
+            val opened = session.open("loaded".encodeToByteArray())
+
+            assertTrue(opened.version > draftVersion)
+            assertFalse(session.canUndo())
+            assertFalse(session.canRedo())
+            assertNull(session.undo())
+            assertEquals("loaded", session.text())
+        } finally {
+            session.close()
+        }
+    }
+
+    @Test
+    fun failedOpenKeepsTheDocumentAndIsReported() {
+        val session = UniffiEditorSession()
+        try {
+            session.open(utf8Bom + "keep\r\n".encodeToByteArray())
+            session.insertText("!")
+            session.endComposition()
+            session.moveCursor(2)
+
+            val text = session.text()
+            val format = session.format()
+            val cursor = session.cursor()
+            val version = session.version()
+            assertTrue(session.canUndo())
+
+            val notUtf8 =
+                assertThrows(DocumentOpenException.NotUtf8::class.java) {
+                    session.open(byteArrayOf(0xC3.toByte()))
+                }
+            assertEquals(0, notUtf8.offset)
+
+            val utf16 =
+                assertThrows(DocumentOpenException.UnsupportedEncoding::class.java) {
+                    session.open(byteArrayOf(0xFF.toByte(), 0xFE.toByte(), 0x61, 0x00))
+                }
+            assertEquals(UnsupportedEncodingKind.Utf16Le, utf16.kind)
+
+            val binary =
+                assertThrows(DocumentOpenException.UnsupportedEncoding::class.java) {
+                    session.open("ab\u0000cd".encodeToByteArray())
+                }
+            assertEquals(UnsupportedEncodingKind.Binary(nulOffset = 2), binary.kind)
+
+            assertEquals(text, session.text())
+            assertEquals(format, session.format())
+            assertEquals(cursor, session.cursor())
+            assertEquals(version, session.version())
+            assertTrue(session.canUndo())
+        } finally {
+            session.close()
+        }
+    }
+
+    @Test
+    fun repeatedOpenBumpsTheVersionAndEmptyFileHasOneLine() {
+        val session = UniffiEditorSession()
+        try {
+            val first = session.open("same".encodeToByteArray())
+            val second = session.open("same".encodeToByteArray())
+            assertTrue(second.version > first.version)
+
+            val empty = session.open(ByteArray(0))
+            assertTrue(empty.version > second.version)
+            assertEquals(1, empty.lineCount)
+            assertEquals(DocumentFormat(bom = false, lineEnding = LineEnding.LF), empty.format)
+
+            val viewport = session.viewport(0, 10)
+            assertEquals(1, viewport.lineCount)
+            assertEquals("", viewport.lines.single().text)
+            assertEquals(0, viewport.cursor.byteOffset)
         } finally {
             session.close()
         }

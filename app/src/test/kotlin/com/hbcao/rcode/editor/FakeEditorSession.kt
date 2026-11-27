@@ -14,6 +14,7 @@ class FakeEditorSession(
     private var document: String = initialText
     private var caret: Int = initialText.length
     private var documentVersion: Long = 1
+    private var documentFormat: DocumentFormat = DocumentFormat.NEW_FILE
 
     private data class Snapshot(
         val text: String,
@@ -27,6 +28,25 @@ class FakeEditorSession(
     private var compositionStart: Snapshot? = null
 
     override fun text(): String = document
+
+    // Test fake: the real decoding (BOM, newline detection, encoding errors) lives in
+    // Rust. This mirrors the state changes of `open` only, so JVM tests can drive the
+    // open -> edit -> undo flow; invalid input and format detection are covered by the
+    // instrumented tests against the real FFI.
+    override fun open(bytes: ByteArray): OpenedDocumentState {
+        document = bytes.toString(Charsets.UTF_8)
+        caret = 0
+        documentVersion += 1
+        clearHistory()
+        return OpenedDocumentState(
+            version = documentVersion,
+            lineCount = lineStarts().size,
+            format = documentFormat,
+            cursor = cursor(),
+        )
+    }
+
+    override fun format(): DocumentFormat = documentFormat
 
     // Test fake: mirrors the Rust codec closely enough for the IME tests. Production
     // encoding always goes through EditorSessionApi -> Rust (T-0010).

@@ -1,18 +1,24 @@
 package com.hbcao.rcode.bridge
 
 import com.hbcao.rcode.editor.DocumentFormat
+import com.hbcao.rcode.editor.DocumentOpenException
 import com.hbcao.rcode.editor.EditorCursorState
 import com.hbcao.rcode.editor.EditorLineSlice
 import com.hbcao.rcode.editor.EditorSessionApi
 import com.hbcao.rcode.editor.EditorViewportSnapshot
 import com.hbcao.rcode.editor.EncodedDocument
 import com.hbcao.rcode.editor.LineEnding
+import com.hbcao.rcode.editor.OpenedDocumentState
+import com.hbcao.rcode.editor.UnsupportedEncodingKind
 import uniffi.rcode_ffi.EditorCursor
+import uniffi.rcode_ffi.EditorException
 import uniffi.rcode_ffi.EditorLine
 import uniffi.rcode_ffi.EditorSession
 import uniffi.rcode_ffi.EditorViewport
+import uniffi.rcode_ffi.OpenedDocument
 import uniffi.rcode_ffi.DocumentFormat as NativeDocumentFormat
 import uniffi.rcode_ffi.LineEnding as NativeLineEnding
+import uniffi.rcode_ffi.UnsupportedEncodingKind as NativeUnsupportedEncodingKind
 
 /**
  * Production [EditorSessionApi] backed by the UniFFI-generated Rust session.
@@ -24,6 +30,17 @@ import uniffi.rcode_ffi.LineEnding as NativeLineEnding
 class UniffiEditorSession(
     private val native: EditorSession = EditorSession(),
 ) : EditorSessionApi {
+    override fun open(bytes: ByteArray): OpenedDocumentState =
+        try {
+            native.open(bytes).toState()
+        } catch (error: EditorException.NotUtf8) {
+            throw DocumentOpenException.NotUtf8(offset = error.offset.toInt())
+        } catch (error: EditorException.UnsupportedEncoding) {
+            throw DocumentOpenException.UnsupportedEncoding(kind = error.kind.toState())
+        }
+
+    override fun format(): DocumentFormat = native.format().toState()
+
     override fun text(): String = native.text()
 
     override fun encode(format: DocumentFormat): EncodedDocument {
@@ -110,6 +127,33 @@ class UniffiEditorSession(
                     LineEnding.LF -> NativeLineEnding.LF
                     LineEnding.CRLF -> NativeLineEnding.CR_LF
                 },
+        )
+
+    private fun NativeDocumentFormat.toState() =
+        DocumentFormat(
+            bom = bom,
+            lineEnding =
+                when (lineEnding) {
+                    NativeLineEnding.LF -> LineEnding.LF
+                    NativeLineEnding.CR_LF -> LineEnding.CRLF
+                },
+        )
+
+    private fun NativeUnsupportedEncodingKind.toState() =
+        when (this) {
+            NativeUnsupportedEncodingKind.Utf16Le -> UnsupportedEncodingKind.Utf16Le
+            NativeUnsupportedEncodingKind.Utf16Be -> UnsupportedEncodingKind.Utf16Be
+            NativeUnsupportedEncodingKind.Utf32Le -> UnsupportedEncodingKind.Utf32Le
+            NativeUnsupportedEncodingKind.Utf32Be -> UnsupportedEncodingKind.Utf32Be
+            is NativeUnsupportedEncodingKind.Binary -> UnsupportedEncodingKind.Binary(nulOffset = nulOffset.toInt())
+        }
+
+    private fun OpenedDocument.toState() =
+        OpenedDocumentState(
+            version = version.toLong(),
+            lineCount = lineCount.toInt(),
+            format = format.toState(),
+            cursor = cursor.toState(),
         )
 
     private fun EditorCursor.toState() =

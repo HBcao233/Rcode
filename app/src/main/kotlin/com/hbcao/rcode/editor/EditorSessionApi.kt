@@ -34,6 +34,35 @@ data class EditorViewportSnapshot(
  * Rust side stores the text in a rope (`rcode-buffer`, T-0007).
  */
 interface EditorSessionApi : AutoCloseable {
+    /**
+     * Replaces the current document with [bytes] decoded as UTF-8 text.
+     *
+     * Decoding happens in Rust (`rcode-fs::codec`): the BOM is stripped, `\r\n` is
+     * normalized to `\n`, and the detected format is stored for [format]. This is
+     * the only way to load a file; do not insert the text as an edit.
+     *
+     * Opening is not an undoable step: the undo/redo history is cleared, the caret
+     * moves to offset 0, and the version increments exactly once (even when the
+     * new text equals the old one). Callers must finish or cancel any IME
+     * composition first (`EditorInputHandler`); the composition range becomes
+     * invalid. On failure the document, format, caret, version and history are
+     * unchanged.
+     *
+     * **Never call this on the main thread**: decoding 10 MB takes tens of
+     * milliseconds (`architecture.md` §3.4). Use `Dispatchers.IO`/`Default`.
+     *
+     * @throws DocumentOpenException when the bytes are not UTF-8 text.
+     */
+    fun open(bytes: ByteArray): OpenedDocumentState
+
+    /**
+     * Format detected when the current document was opened (BOM + line ending).
+     *
+     * Pass this to [encode] when saving. A document that was never opened reports
+     * [DocumentFormat.NEW_FILE].
+     */
+    fun format(): DocumentFormat
+
     /** Full document text. For tests and diagnostics only. */
     fun text(): String
 
@@ -48,7 +77,7 @@ interface EditorSessionApi : AutoCloseable {
      */
     fun encode(format: DocumentFormat): EncodedDocument
 
-    /** Monotonic document version; changes on every text edit. */
+    /** Monotonic document version; changes on every text edit and on every [open]. */
     fun version(): Long
 
     /** Number of logical lines (always at least 1). */
@@ -115,8 +144,8 @@ interface EditorSessionApi : AutoCloseable {
     /**
      * Clears the undo/redo history without changing the text.
      *
-     * Load or replace the document text first, then call this: opening a file must
-     * not become an undoable step (T-0011/T-0012).
+     * [open] already does this, so loading a file cannot become an undoable step.
+     * Use this only when text is replaced by some other means.
      */
     fun clearHistory()
 
@@ -141,7 +170,17 @@ interface EditorSessionApi : AutoCloseable {
     /** Moves the caret by [deltaLines] and returns the offset. */
     fun moveCursorVertical(deltaLines: Int): Int
 
-    /** Returns up to [maxLines] lines starting at [firstLine]. */
+    /**
+     * Returns up to [maxLines] lines starting at [firstLine], plus the caret, in one
+     * call.
+     *
+     * This is the only bulk read API; do not call it once per line or per character
+     * (`uniffi-bridge` skill). [firstLine] is clamped to the document, [maxLines] is
+     * clamped to `1..=10000`, and each line's [EditorLineSlice.startByte] is a UTF-8
+     * byte offset into the buffer. Line text excludes the terminator. [version] and
+     * [EditorViewportSnapshot.lines] come from the same snapshot, so a renderer can
+     * reuse its layout cache while the version is unchanged.
+     */
     fun viewport(
         firstLine: Int,
         maxLines: Int,
