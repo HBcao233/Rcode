@@ -318,10 +318,17 @@ class EditorView(
         oldHeight: Int,
     ) {
         super.onSizeChanged(width, height, oldWidth, oldHeight)
-        // A size change alters the x window every line was laid out for, and the number
-        // of rows the cache has to cover, so start with an empty cache (T-0014).
-        visibleRows = visibleRowsFor(height)
-        layoutCache = EditorLineLayoutCache(layoutBuilder, EditorLineLayoutCache.capacityFor(visibleRows))
+        // A layout depends on the width (the x window it was measured against), not on
+        // the height; only a width change invalidates every entry. The IME opening or
+        // closing (adjustResize) changes the height alone, so the cache survives it and
+        // only the row count / capacity is recomputed (T-0014).
+        val rows = visibleRowsFor(height)
+        visibleRows = rows
+        if (width != oldWidth) {
+            layoutCache = EditorLineLayoutCache(layoutBuilder, EditorLineLayoutCache.capacityFor(rows))
+        } else {
+            ensureCacheCapacity(rows)
+        }
         refreshViewport()
     }
 
@@ -378,10 +385,7 @@ class EditorView(
     private fun visibleRowsFor(height: Int): Int = ((height - paddingTop - paddingBottom).toFloat() / lineHeight).toInt().coerceAtLeast(1)
 
     private fun ensureCacheCapacity(rows: Int) {
-        val needed = EditorLineLayoutCache.capacityFor(rows)
-        if (layoutCache.capacity < needed) {
-            layoutCache = EditorLineLayoutCache(layoutBuilder, needed)
-        }
+        layoutCache.ensureCapacity(EditorLineLayoutCache.capacityFor(rows))
     }
 
     /** Line drawn at the top of the viewport; `0` after a document is opened (V9). */
@@ -398,6 +402,9 @@ class EditorView(
         if (lineIndex < firstLine || lineIndex >= firstLine + visibleRows) return null
         return layoutAt(lineIndex)?.displayText
     }
+
+    /** Test hook (T-0014): number of cached line layouts. */
+    internal fun cachedLayoutCount(): Int = layoutCache.size
 
     /**
      * Resets rendering and the IME after the session replaced its document (T-0012).

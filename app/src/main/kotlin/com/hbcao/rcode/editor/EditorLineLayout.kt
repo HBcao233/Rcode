@@ -285,11 +285,12 @@ internal class LineLayoutBuilder(
  * changes, and `EditorView` drops the cache in `onSizeChanged`.
  *
  * @property capacity maximum number of cached lines; `max(3 × visible rows, [MIN_ENTRIES])`
- *   in production, so one screen plus both prefetch screens survive a scroll.
+ *   in production, so one screen plus both prefetch screens survive a scroll. It only
+ *   ever grows ([ensureCapacity]): a height change (IME opening) keeps the entries.
  */
 internal class EditorLineLayoutCache(
     private val builder: LineLayoutBuilder,
-    val capacity: Int = MIN_ENTRIES,
+    capacity: Int = MIN_ENTRIES,
 ) {
     private data class Key(
         val documentId: Long,
@@ -298,13 +299,24 @@ internal class EditorLineLayoutCache(
         val lineIndex: Int,
     )
 
+    var capacity: Int = capacity.coerceAtLeast(1)
+        private set
+
     private val entries =
-        object : LinkedHashMap<Key, LaidOutLine>(capacity.coerceAtLeast(1), LOAD_FACTOR, true) {
+        object : LinkedHashMap<Key, LaidOutLine>(this.capacity, LOAD_FACTOR, true) {
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Key, LaidOutLine>): Boolean = size > capacity
         }
 
     /** Number of cached lines; the JVM tests assert hits and eviction with it. */
     val size: Int get() = entries.size
+
+    /**
+     * Raises the entry limit to [entries] without dropping anything; a smaller value is
+     * ignored, so a view that got shorter (keyboard opened) keeps its layouts.
+     */
+    fun ensureCapacity(entries: Int) {
+        if (entries > capacity) capacity = entries
+    }
 
     /**
      * Returns the layout of [line] for the given document state, laying it out on a miss.

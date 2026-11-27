@@ -217,9 +217,11 @@ All notable changes are documented here. Format follows Keep a Changelog.
   underline are lookups instead of `measureText` calls from the line start.
 - Added the layout cache keyed by `(documentId, version, lineIndex, fontConfig)` with
   `max(3 × visible rows, 256)` least-recently-used entries (Q-T14-1). `showDocument`
-  clears it when the document id changes, `onSizeChanged` rebuilds it because the
-  measured x window changed, and saving (T-0013) does not touch it: the version and
-  the document id stay the same, so no relayout happens.
+  clears it when the document id changes; a **width** change rebuilds it because the
+  measured x window changed, while a **height**-only change (the IME opening or
+  closing via `adjustResize`) keeps every entry and only recomputes the row count and
+  the capacity, which never shrinks. Saving (T-0013) does not touch it either: the
+  version and the document id stay the same, so no relayout happens.
 - Changed `EditorView.refreshViewport()` to fetch one viewport call covering the
   visible rows plus one screen above and below (Q-T14-2, capped at 10000 lines) and to
   lay out only those rows; `onDraw` walks the visible rows out of the cached

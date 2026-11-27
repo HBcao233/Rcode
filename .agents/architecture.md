@@ -59,7 +59,7 @@ Kotlin 不得缓存完整文本副本作为权威数据。
 - 行布局缓存按版本号失效。
 - 高亮采用“视口 + 预取一屏”策略。
 - **布局层与缓存（T-0014）**：`editor/EditorLineLayout.kt` 把“一行怎么画”从 View 里拆出来：`LineLayoutBuilder` 用注入的 `LineMeasurer`（生产实现是 `PaintLineMeasurer`，一次 `getTextWidths` 量一个 256 单元的分块；JVM 测试用固定宽度的假实现）算出 `LaidOutLine`（Tab 展开后的 `displayText`、每个 UTF-16 边界的 `xOffsets`、行宽）。Tab 固定展开为 4 个空格（Q-T14-3），不假设一字符一宽；组合字符按 scalar 处理（Q-T14-7，丛书级光标留给后续任务）。
-- **缓存键与失效（T-0014）**：`EditorLineLayoutCache` 的键是 `(documentId, version, lineIndex, fontConfig)`，文档 id 来自 `EditorView.showDocument(documentId)`（T-0012 的 `DocumentUiState.Opened.documentId`：未命名 `0`，每次 `open` +1，T-0013 另存为不变）；id、字体或视图宽度变化时整库存失效（宽度不进键，`onSizeChanged` 重建缓存）。容量 `max(3 × 可见行数, 256)`，最少使用的条目先被淘汰（Q-T14-1）；版本变化不做整体清空，未请求的行不会被误用。保存（T-0013）不改变版本也不回调，因此不会触发重排。
+- **缓存键与失效（T-0014）**：`EditorLineLayoutCache` 的键是 `(documentId, version, lineIndex, fontConfig)`，文档 id 来自 `EditorView.showDocument(documentId)`（T-0012 的 `DocumentUiState.Opened.documentId`：未命名 `0`，每次 `open` +1，T-0013 另存为不变）；id、字体或视图**宽度**变化时整库失效（宽度不进键，`onSizeChanged` 只在宽度变化时重建缓存）。**高度变化**（输入法弹出/收起导致的 `adjustResize`、分屏改变高度）不影响行布局，只重算可见行数与容量，缓存保留。容量 `max(3 × 可见行数, 256)`，只增不减；最少使用的条目先被淘汰（Q-T14-1）；版本变化不做整体清空，未请求的行不会被误用。保存（T-0013）不改变版本也不回调，因此不会触发重排。
 - **预取与绘制（T-0014）**：每次刷新只调一次 `viewport(firstLine - rows, 3 × rows)`（上下各一屏，Q-T14-2，上限 10000），可见行以外的行只布局不绘制。`onDraw` 只读 `LaidOutLine`、不调 FFI、不分配对象；光标与组合下划线用 `xOffsets` 换算，不再从行首 `measureText`。
 - **长行窗口（T-0014）**：`LineLayoutBuilder` 只量到“可见宽度 + 一个行高”为止（`truncated = true`），开销与可见宽度相关、不随行长度线性增长；`scrollX` 恒为 0，T-0015 的横向滚动直接复用该窗口。
 - **A1 初版测量（T-0014）**：仪器测试用合成 10 MB 文本分别计时 `open`、首次 `viewport` + 布局、首帧 `draw`，写 logcat 标签 `rcode-editor-t14`；T-0025 做正式 Macrobenchmark 判定。`onDocumentOpened()` 里 T-0012 加的 `first viewport after open: …ms` 日志保留，作为同一来源的粗粒度参考。

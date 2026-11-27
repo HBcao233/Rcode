@@ -97,6 +97,32 @@ class EditorLineLayoutCacheTest {
     }
 
     @Test
+    fun ensureCapacityKeepsExistingEntries() {
+        val measurer = CountingMeasurer()
+        val cache = EditorLineLayoutCache(LineLayoutBuilder(measurer), capacity = 2)
+        cache.layoutFor(1, 1, font, line(0, "a"), 1_000f)
+        cache.layoutFor(1, 1, font, line(1, "b"), 1_000f)
+
+        cache.ensureCapacity(10)
+
+        assertEquals(10, cache.capacity)
+        assertEquals(2, cache.size)
+        val callsBefore = measurer.measureCalls
+        cache.layoutFor(1, 1, font, line(0, "a"), 1_000f)
+        assertEquals("existing layouts must survive a capacity raise", callsBefore, measurer.measureCalls)
+    }
+
+    @Test
+    fun ensureCapacityNeverShrinks() {
+        // A view that got shorter (IME opened) keeps its entries.
+        val cache = EditorLineLayoutCache(LineLayoutBuilder(CountingMeasurer()), capacity = 300)
+
+        cache.ensureCapacity(256)
+
+        assertEquals(300, cache.capacity)
+    }
+
+    @Test
     fun capacityCoversTheViewportAndBothPrefetchScreens() {
         assertEquals(EditorLineLayoutCache.MIN_ENTRIES, EditorLineLayoutCache.capacityFor(10))
         assertEquals(600, EditorLineLayoutCache.capacityFor(200))

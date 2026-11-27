@@ -155,7 +155,7 @@ internal class EditorLineLayoutCache(private val capacity: Int) {
 - [x] **V1** 布局层与 Canvas 解耦：`LineLayoutBuilder` 可在 JVM 中用注入的测量函数测试；`EditorView` 不再直接 `measureText` 整行来定位光标。
   - `LineLayoutBuilder.kt` 的 `LineMeasurer` 注入；`LineLayoutBuilderTest` 14 个用例；`EditorView.caretRect`/`composingUnderlines` 改为 `LaidOutLine.xForTextIndex`，View 内已无 `measureText`。
 - [x] **V2** 缓存键为 `(documentId, version, lineIndex, fontConfig)`；同一版本内重复刷新同一屏不重新布局（测试用计数器断言命中）；版本变化后请求到的行会重排；`invalidateAll()` 清空缓存；`showDocument` 换文档（id 变化）后不复用旧布局，而 T-0013 的保存/另存为（版本与 id 均不变）**不**触发重排。
-  - `EditorLineLayoutCacheTest` 7 个用例（命中、版本/文档/字体失效、`invalidateAll`、LRU 淘汰、容量）；`showDocument` 与 `onSizeChanged` 清缓存；保存链路不改变版本也不调 `refreshViewport`，因此不重排（代码核对）。
+  - `EditorLineLayoutCacheTest` 9 个用例（命中、版本/文档/字体失效、`invalidateAll`、LRU 淘汰、容量与 `ensureCapacity`）；`showDocument` 与宽度变化清缓存，高度变化保留；保存链路不改变版本也不调 `refreshViewport`，因此不重排（代码核对）。
 - [ ] **V3** 预取为“可见行上下各一屏”，总行数不超过 `MAX_VIEWPORT_LINES`；每次刷新只调用一次 `viewport`；`onDraw` 中无 FFI 调用、无每帧分配（代码检查 + 测试断言调用计数）。
   - 代码完成（`refreshViewport` 单次 `viewport(firstLine - rows, 3 × rows)`，上限 10000；`onDraw` 只遍历缓存）；`EditorRenderingInstrumentedTest.twoHundredAdjacentViewportsDrawTheCursorLine` 写了“每次刷新 1 次 viewport + `draw` 前后 FFI 计数不变”的断言，**未在设备运行**。
 - [ ] **V4** 任意 `firstLine`（0、中间、末屏、空文档、行数不足一屏）时顶部行与行内容正确，末尾不越界。
@@ -204,20 +204,20 @@ cd ..
 
 ## 待确认
 
-- [x] **Q-T14-1 布局缓存容量与淘汰**（已按推荐实施）：
-  容量 `max(3 × 可见行数, 256)`，超出后按最少使用（access-order `LinkedHashMap`，即 LRU；比推荐里的 FIFO 近似更简单且无额外依赖）。
-- [x] **Q-T14-2 预取范围**（已按推荐实施）：
-  可见区上下各一屏（`firstLine - visibleRows .. firstLine + 2 × visibleRows`），整体夹到文档范围且不超过 `MAX_VIEWPORT_LINES = 10000`；每次刷新仍只调一次 `viewport`。
-- [x] **Q-T14-3 Tab 宽度**（已按推荐实施）：
-  固定 4 个空格（`TAB_SIZE = 4`），`displayText` 中把 `\t` 展开为 4 个空格，不提供配置。
+- [x] **Q-T14-1 布局缓存容量与淘汰**：
+  - 容量 `max(3 × 可见行数, 256)`，超出后按最少使用（access-order `LinkedHashMap`，即 LRU。
+- [x] **Q-T14-2 预取范围**：
+  - 可见区上下各一屏（`firstLine - visibleRows .. firstLine + 2 × visibleRows`），整体夹到文档范围且不超过 `MAX_VIEWPORT_LINES = 10000`；每次刷新仍只调一次 `viewport`。
+- [x] **Q-T14-3 Tab 宽度**：
+  - 固定 4 个空格（`TAB_SIZE = 4`），`displayText` 中把 `\t` 展开为 4 个空格，不提供配置。
 - [x] **Q-T14-4 A1 初版测量用合成数据还是等 T-0012**（已因 T-0012 完成而失效）：
-  T-0012 已 Reviewed，打开链路可直接复用：仍按推荐用合成 10 MB 字节调 `EditorSession.open` 测三段耗时，设备可用时再补一条经 `DocumentIo` 读取的端到端数值作对照；不再需要“等 T-0012”。
-- [x] **Q-T14-5 长行窗口是否现在就做**（已按推荐实施）：
-  现在就做：布局只测到“可见 x 窗口 + 一屏”（`maxWidth`），超出部分不进入 `displayText`；`scrollX` 恒 0，T-0015 直接复用。
+  - T-0012 已 Reviewed，打开链路可直接复用：仍按推荐用合成 10 MB 字节调 `EditorSession.open` 测三段耗时，设备可用时再补一条经 `DocumentIo` 读取的端到端数值作对照；不再需要“等 T-0012”。
+- [x] **Q-T14-5 长行窗口是否现在就做**：
+  - 现在就做：布局只测到“可见 x 窗口 + 一屏”（`maxWidth`），超出部分不进入 `displayText`；`scrollX` 恒 0，T-0015 直接复用。
 - [x] **Q-T14-6 `document_id` 的来源**（已由 T-0012/T-0013 的实现确定）：
-  不新建 id 来源：直接用 `EditorView.showDocument(documentId)` 传入的 `DocumentUiState.Opened.documentId`（未命名 `0`，每次 `open` +1，T-0013 另存为不变）；`EditorView` 在该路径上清缓存即可，不新增 `onDocumentReplaced()`。
-- [x] **Q-T14-7 grapheme cluster**（已按推荐实施）：
-  本任务与 M1.0、T-0015 一致，按 Unicode scalar 处理（`xOffsets` 按 UTF-16 边界给出），组合 emoji 等作为已知限制记录；簇级光标留给独立任务。
+  - 不新建 id 来源：直接用 `EditorView.showDocument(documentId)` 传入的 `DocumentUiState.Opened.documentId`（未命名 `0`，每次 `open` +1，T-0013 另存为不变）；`EditorView` 在该路径上清缓存即可，不新增 `onDocumentReplaced()`。
+- [x] **Q-T14-7 grapheme cluster**：
+  - 本任务与 M1.0、T-0015 一致，按 Unicode scalar 处理（`xOffsets` 按 UTF-16 边界给出），组合 emoji 等作为已知限制记录；簇级光标留给独立任务。
 
 ## 阻塞
 
@@ -230,7 +230,7 @@ cd ..
 - 分支与提交：`feat/m1-t14-canvas-rendering`（实现提交见 `git log`；本任务单与实现同分支提交）。
 - 已完成：
   - 新增 `editor/EditorLineLayout.kt`：`FontConfig`、`LineMeasurer`/`PaintLineMeasurer`、`LaidOutLine`（Tab 展开后的 `displayText`、每个 UTF-16 边界的 `xOffsets`、宽、截断标记）、`LineLayoutBuilder`（注入测量函数、256 单元分块 `getTextWidths`、按可见宽度停止）、`EditorLineLayoutCache`（键 `(documentId, version, lineIndex, fontConfig)`，LRU，容量 `max(3 × 可见行数, 256)`）。
-  - `EditorView`：`refreshViewport()` 改为一次 `viewport(firstLine - rows, 3 × rows)`（限 10000）并把取到的行过缓存；`onDraw` 只遍历可见行、无 FFI/无分配；光标与组合下划线改用 `xOffsets`；`showDocument` 换文档时清缓存，`onSizeChanged` 重建缓存（x 窗口变化），新增 `invalidateAll()`（供 T-0021 改字号）与 `visibleTextAt()` 仪器测试钩子；删除旧的 `RenderedLine`/单行预取。
+  - `EditorView`：`refreshViewport()` 改为一次 `viewport(firstLine - rows, 3 × rows)`（限 10000）并把取到的行过缓存；`onDraw` 只遍历可见行、无 FFI/无分配；光标与组合下划线改用 `xOffsets`；`showDocument` 换文档时清缓存，`onSizeChanged` 只在宽度变化时重建缓存（高度变化——输入法弹出/收起——保留缓存并重算行数/容量），新增 `invalidateAll()`（供 T-0021 改字号）、`visibleTextAt()`/`cachedLayoutCount()` 仪器测试钩子；删除旧的 `RenderedLine`/单行预取。
   - 测试：`LineLayoutBuilderTest`（14 个）、`EditorLineLayoutCacheTest`（7 个）JVM 用例；新增 `EditorRenderingInstrumentedTest`（10 MB 首屏三段计时、200 个相邻视口 + 每刷新 1 次 `viewport` + `onDraw` 零 FFI、边界（单行/空文档/末屏）、换文档清缓存），已通过 `compileDebugAndroidTestKotlin`，**未在设备运行**。
   - 文档：`architecture.md` §3.3（布局层、缓存键/失效、预取、长行窗口、A1 分工）、`glossary.md`（行布局/布局缓存键/预取）、`CHANGELOG.md`、本任务单与 backlog。
 - 未完成（需人类补测）：V3/V4/V7/V8/V9 的仪器与真机部分（`connectedDebugAndroidTest`、10 MB 三段耗时数值、200 视口耗时基线、M1.0 输入回归）。
@@ -252,5 +252,5 @@ cd ..
 - 下一步建议：
   1. 有设备时跑 `./gradlew :app:connectedDebugAndroidTest`，把 `rcode-editor-t14` 的 `open/layout/draw` 数值回填本任务单（V7）与 A2 基线（V8）。
   2. 真机滚动目前只能靠光标移动（T-0015 之前）；那时接入手势后重新看一次预取是否够用（上下各一屏）。
-  3. 已知限制：grapheme cluster 级光标（Q-T14-7）、超过可见窗口的长行不自带横向滚动（T-0015）、`scrollX` 恒 0；缓存容量按屏重算，旋转会清空缓存（预期）。
+  3. 已知限制：grapheme cluster 级光标（Q-T14-7）、超过可见窗口的长行不自带横向滚动（T-0015）、`scrollX` 恒 0；缓存失效规则：文档 id / 字体 / **宽度**变化会清空（旋转、分屏改宽度属预期），**高度**变化不清空（输入法弹出/收起、`adjustResize`），只重算行数与容量（容量只增不减）；已用 `imeSizedHeightChangeKeepsTheLayoutCache` 仪器用例固定该行为（待设备运行）。
   4. 审查重点：`EditorView.refreshViewport` 的 firstLine/prefetch 计算与 `onDraw` 的可见范围交集；`LineLayoutBuilder` 的截断循环是否在代理对/制表位处落下非法边界。

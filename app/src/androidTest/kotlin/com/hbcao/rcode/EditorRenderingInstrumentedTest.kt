@@ -161,6 +161,37 @@ class EditorRenderingInstrumentedTest {
     }
 
     @Test
+    fun imeSizedHeightChangeKeepsTheLayoutCache() {
+        val session = UniffiEditorSession()
+        try {
+            instrumentation.runOnMainSync {
+                session.open((0 until 1_000).joinToString("\n") { "line $it" }.encodeToByteArray())
+                val view = EditorView(instrumentation.targetContext, session, colors())
+                view.layout(0, 0, VIEW_WIDTH, VIEW_HEIGHT)
+                view.refreshViewport()
+                val cachedBefore = view.cachedLayoutCount()
+                assertTrue("expected prefetched layouts", cachedBefore > 0)
+
+                // The IME opens: adjustResize shrinks the height, the width stays, so
+                // the x window did not change and every layout is still valid.
+                view.layout(0, 0, VIEW_WIDTH, VIEW_HEIGHT / 2)
+                view.refreshViewport()
+                assertEquals(cachedBefore, view.cachedLayoutCount())
+
+                // A width change (rotation / split screen) does change the x window.
+                view.layout(0, 0, VIEW_WIDTH / 2, VIEW_HEIGHT / 2)
+                view.refreshViewport()
+                assertTrue(
+                    "a width change should drop the old geometry",
+                    view.cachedLayoutCount() < cachedBefore,
+                )
+            }
+        } finally {
+            session.close()
+        }
+    }
+
+    @Test
     fun openingAnotherDocumentDropsTheCachedLayout() {
         val session = UniffiEditorSession()
         try {
