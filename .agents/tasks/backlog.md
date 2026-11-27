@@ -60,7 +60,7 @@
   - 任务单 `T-0008-undo-redo.md` - Reviewed（`feat/m1-t8-undo-redo`，负责人 deepseek-v4p1-flash-1017）
   - 验收：A5 的 proptest 通过；500 ms 内连续插入合并为一步；换行断开合并。
 
-- [ ] **T-0011 编辑会话 FFI**（依赖 T-0007、T-0008、T-0009）
+- [x] **T-0011 编辑会话 FFI**（依赖 T-0007、T-0008、T-0009）
   - 任务单 `T-0011-edit-session.md` - Review（`feat/m1-t11-edit-session`，负责人 deepseek-v4p1-flash-1017；Q-T11-1..5 已确认；自动化检查通过，仪器测试待真机）
   - 范围：通过 `rcode-ffi` 暴露 open / edit / 批量取行 / 当前版本号（undo / redo 已由 T-0008 导出，本任务复用并按需重组签名）。`open` 内部调用 `clear_history()`，加载本身不得成为可撤销步骤。Kotlin 侧不缓存完整文本（architecture §3.1）。
   - 验收：Kotlin 仪器测试可完成“打开 → 插入 → 撤销 → 取行”；FFI 层不 panic（`catch_unwind` 或等价保证）。
@@ -82,6 +82,8 @@
   - 范围：自定义 Canvas 只绘制可见行；行布局缓存按版本号失效；视口 + 预取一屏。
   - 验收：10 MB 文件可滚动；A1 首屏 < 500 ms 的初版测量结果已记录。
   - 相关 skill：editor-rendering、perf-benchmark
+- [ ] **T-0028 撤销/重做 UI 与 IME 快捷键接**
+  - 范围：按钮； Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y；updateSelection + enable 状态。
 - [ ] **T-0015 光标（触摸）**（依赖 T-0014）
   - 验收：单击定位光标；光标位置由 Rust 返回的字符偏移决定。
 - [ ] **T-0016 选区**（依赖 T-0015）
