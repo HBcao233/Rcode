@@ -2,5 +2,22 @@
 <resources>
     <string name="app_name">Rcode</string>
     <string name="editor_title_untitled">untitled.txt</string>
+    <string name="editor_title_modified">%1$s*</string>
     <string name="editor_core_error">core error: %1$s</string>
+    <string name="editor_reading">Opening…</string>
+    <string name="editor_read_only">Read-only</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="editor_open_failed_not_found">The file was moved or deleted.</string>
+    <string name="editor_open_failed_permission">No permission to read this file. Pick it again.</string>
+    <string name="editor_open_failed_too_large">The file is larger than %1$s, which this version cannot open.</string>
+    <string name="editor_open_failed_read">Reading the file failed.</string>
+    <string name="editor_open_failed_not_utf8">The file is not UTF-8 text.</string>
+    <string name="editor_open_failed_unsupported">Unsupported encoding (%1$s). Only UTF-8 is supported.</string>
+    <string name="editor_open_failed_internal">Something went wrong while opening the file.</string>
+    <string name="editor_discard_title">Discard unsaved changes?</string>
+    <string name="editor_discard_message">Opening another file discards the changes in the current one.</string>
+    <string name="editor_discard_confirm">Discard and open</string>
+    <string name="editor_large_file_title">Large file</string>
+    <string name="editor_large_file_message">%1$s is %2$s. Opening it may use a lot of memory. Continue?</string>
+    <string name="editor_large_file_confirm">Open anyway</string>
 </resources>

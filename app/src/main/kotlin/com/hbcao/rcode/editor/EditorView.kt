@@ -6,6 +6,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.text.InputType
+import android.util.Log
 import android.util.TypedValue
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -27,6 +28,8 @@ class EditorView(
     context: Context,
     private val session: EditorSessionApi,
     private val colors: EditorColors,
+    /** Receives the new document version after every edit, open or undo/redo. */
+    private val onVersionChanged: (Long) -> Unit = {},
 ) : View(context) {
     private val inputHandler = EditorInputHandler(session)
 
@@ -56,6 +59,12 @@ class EditorView(
 
     /** First line currently drawn at the top of the viewport. */
     private var firstLine: Int = 0
+
+    /** Document shown by this view; a change resets the viewport (T-0012). */
+    private var documentId: Long = 0
+
+    private var reportedVersion: Long = -1
+    private var firstViewportStartedNanos: Long = 0
 
     private var renderedLines: List<RenderedLine> = emptyList()
     private var caretRect: RectF? = null
@@ -305,6 +314,11 @@ class EditorView(
         val viewport = session.viewport(firstLine, visibleRows + 1)
         firstLine = viewport.firstLine
 
+        if (viewport.version != reportedVersion) {
+            reportedVersion = viewport.version
+            onVersionChanged(viewport.version)
+        }
+
         val left = paddingLeft.toFloat()
         val lines =
             viewport.lines.map { line ->
@@ -321,6 +335,40 @@ class EditorView(
         caretRect = caretRect(viewport, lines, left)
         composingUnderlines = composingUnderlines(lines, left)
         invalidate()
+
+        if (firstViewportStartedNanos != 0L) {
+            val elapsedMillis = (System.nanoTime() - firstViewportStartedNanos) / NANOS_PER_MILLI
+            Log.i(LOG_TAG, "first viewport after open: ${elapsedMillis}ms")
+            firstViewportStartedNanos = 0
+        }
+    }
+
+    /** Line drawn at the top of the viewport; `0` after a document is opened (V9). */
+    val firstVisibleLine: Int
+        get() = firstLine
+
+    /**
+     * Resets rendering and the IME after the session replaced its document (T-0012).
+     *
+     * The composing range, the surrounding-text context and the selection all become
+     * stale when `open` swaps the text, hence `restartInput` (Q-T12-6).
+     */
+    fun onDocumentOpened() {
+        firstViewportStartedNanos = System.nanoTime()
+        finishComposingText()
+        firstLine = 0
+        refreshViewport()
+        (context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)?.restartInput(this)
+    }
+
+    /**
+     * Points this view at the document identified by [documentId], resetting the
+     * viewport when it differs from the previous one (called from `MainScreen`).
+     */
+    fun showDocument(documentId: Long) {
+        if (this.documentId == documentId) return
+        this.documentId = documentId
+        onDocumentOpened()
     }
 
     private fun caretRect(
@@ -397,5 +445,7 @@ class EditorView(
     private companion object {
         const val DEFAULT_TEXT_SIZE_SP = 14f
         const val MAX_CONTEXT_UNITS = 65_536
+        const val LOG_TAG = "rcode-editor"
+        const val NANOS_PER_MILLI = 1_000_000L
     }
 }

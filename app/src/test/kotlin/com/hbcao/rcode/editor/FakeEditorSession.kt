@@ -27,6 +27,9 @@ class FakeEditorSession(
     private var composing: Boolean = false
     private var compositionStart: Snapshot? = null
 
+    // Test hook (T-0012): lets open-error mapping be exercised without a Rust session.
+    var openFailure: Exception? = null
+
     override fun text(): String = document
 
     // Test fake: the real decoding (BOM, newline detection, encoding errors) lives in
@@ -34,6 +37,10 @@ class FakeEditorSession(
     // open -> edit -> undo flow; invalid input and format detection are covered by the
     // instrumented tests against the real FFI.
     override fun open(bytes: ByteArray): OpenedDocumentState {
+        openFailure?.let { failure ->
+            openFailure = null
+            throw failure
+        }
         document = bytes.toString(Charsets.UTF_8)
         caret = 0
         documentVersion += 1

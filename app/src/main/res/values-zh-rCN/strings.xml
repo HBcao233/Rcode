@@ -2,5 +2,22 @@
 <resources>
     <string name="app_name">Rcode</string>
     <string name="editor_title_untitled">untitled.txt</string>
+    <string name="editor_title_modified">%1$s*</string>
     <string name="editor_core_error">核心错误：%1$s</string>
+    <string name="editor_reading">正在打开…</string>
+    <string name="editor_read_only">只读</string>
+    <string name="action_cancel">取消</string>
+    <string name="editor_open_failed_not_found">文件已被移动或删除。</string>
+    <string name="editor_open_failed_permission">没有读取该文件的权限，请重新选择。</string>
+    <string name="editor_open_failed_too_large">文件超过 %1$s 的打开上限。</string>
+    <string name="editor_open_failed_read">读取文件失败。</string>
+    <string name="editor_open_failed_not_utf8">文件不是 UTF-8 文本。</string>
+    <string name="editor_open_failed_unsupported">不支持的编码（%1$s），目前仅支持 UTF-8。</string>
+    <string name="editor_open_failed_internal">打开文件时发生未知错误。</string>
+    <string name="editor_discard_title">放弃未保存的修改？</string>
+    <string name="editor_discard_message">打开另一个文件会丢弃当前未保存的修改。</string>
+    <string name="editor_discard_confirm">放弃并打开</string>
+    <string name="editor_large_file_title">大文件</string>
+    <string name="editor_large_file_message">%1$s 大小为 %2$s，打开可能占用较多内存。是否继续？</string>
+    <string name="editor_large_file_confirm">继续打开</string>
 </resources>

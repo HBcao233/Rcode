@@ -1,5 +1,10 @@
 package com.hbcao.rcode.ui
 
+import android.content.Context
+import android.content.Intent
+import android.text.format.Formatter
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -20,6 +25,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -28,21 +34,27 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hbcao.rcode.R
 import com.hbcao.rcode.editor.EditorView
+import com.hbcao.rcode.editor.UnsupportedEncodingKind
 import com.hbcao.rcode.icons.Apps
 import com.hbcao.rcode.icons.Code
 import com.hbcao.rcode.icons.ExitToApp
@@ -61,36 +73,65 @@ import com.hbcao.rcode.icons.Redo
 import com.hbcao.rcode.icons.Save
 import com.hbcao.rcode.icons.Terminal2
 import com.hbcao.rcode.icons.Undo
+import com.hbcao.rcode.platform.document.toDocumentKey
+import com.hbcao.rcode.state.DocumentUiState
 import com.hbcao.rcode.state.MainUiState
 import com.hbcao.rcode.state.MainViewModel
+import com.hbcao.rcode.state.OpenFailure
+import com.hbcao.rcode.state.OpenRequest
 import com.hbcao.rcode.ui.theme.EditorColors
 
 /**
- * Main (and currently only) screen: the M1.0 editor for `untitled.txt`.
+ * Main (and currently only) screen: the M1 editor.
  *
  * The document session lives in [MainViewModel] so it survives rotation; the custom
- * [EditorView] only owns rendering state and is re-created from the Rust session.
+ * [EditorView] only owns rendering state and is re-created from the Rust session. The
+ * SAF picker entry point, the document title and the open-flow prompts live here
+ * (T-0012).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(viewModel: MainViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val documentState by viewModel.documentState.collectAsStateWithLifecycle()
+    val openRequest by viewModel.openRequest.collectAsStateWithLifecycle()
+    val openError by viewModel.openError.collectAsStateWithLifecycle()
+    val dirty by viewModel.dirty.collectAsStateWithLifecycle()
     val coreStatus = coreStatusText(state)
     val editorColors = editorColors()
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val openDocumentLauncher =
+        rememberLauncherForActivityResult(OpenDocumentWithWriteAccess()) { uri ->
+            if (uri != null) viewModel.openDocument(uri.toDocumentKey())
+        }
+    val documentId = (documentState as? DocumentUiState.Opened)?.documentId ?: 0L
+    val failureMessage = openError?.let { openFailureText(it, context) }
+
+    // Open failures are one-shot: show them, then let the view model drop them so a
+    // rotation does not re-show a stale message.
+    LaunchedEffect(openError) {
+        val message = failureMessage ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message)
+        viewModel.dismissOpenError()
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
                     Column {
                         Text(
-                            text = stringResource(R.string.editor_title_untitled),
+                            text = documentTitle(documentState, dirty),
                             style = MaterialTheme.typography.titleMedium,
                         )
-                        Text(
-                            text = stringResource(R.string.editor_title_untitled),
-                            style = MaterialTheme.typography.bodySmall,
-                        )
+                        documentSubtitle(openRequest, documentState)?.let { subtitle ->
+                            Text(
+                                text = subtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
                     }
                 },
                 navigationIcon = {
@@ -108,7 +149,10 @@ fun MainScreen(viewModel: MainViewModel) {
                             contentDescription = "Edit",
                         )
                     }
-                    MoreMenuButton()
+                    MoreMenuButton(
+                        openEnabled = openRequest == null,
+                        onOpenFile = { openDocumentLauncher.launch(ANY_MIME_TYPE) },
+                    )
                     /*Text(
                         text = coreStatus,
                         style = MaterialTheme.typography.labelSmall,
@@ -131,11 +175,146 @@ fun MainScreen(viewModel: MainViewModel) {
         },
     ) { innerPadding ->
         AndroidView(
-            factory = { context -> EditorView(context, viewModel.editorSession, editorColors) },
+            factory = { viewContext ->
+                EditorView(
+                    viewContext,
+                    viewModel.editorSession,
+                    editorColors,
+                    onVersionChanged = viewModel::onDocumentVersionChanged,
+                )
+            },
+            update = { view -> view.showDocument(documentId) },
             modifier = Modifier.fillMaxSize().padding(innerPadding),
         )
     }
+
+    OpenRequestDialogs(openRequest = openRequest, viewModel = viewModel, context = context)
 }
+
+/** `OpenDocument` that also asks for a write grant so the picked file can be saved in place. */
+private class OpenDocumentWithWriteAccess : ActivityResultContracts.OpenDocument() {
+    override fun createIntent(
+        context: Context,
+        input: Array<String>,
+    ): Intent = super.createIntent(context, input).addFlags(GRANT_FLAGS)
+
+    private companion object {
+        // Q-T12-2: without this the app can read the file but never save into it.
+        val GRANT_FLAGS =
+            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+    }
+}
+
+/** Q-T12-1: no MIME filter; the Rust UTF-8 check rejects non-text documents with a message. */
+private val ANY_MIME_TYPE = arrayOf("*/*")
+
+@Composable
+private fun OpenRequestDialogs(
+    openRequest: OpenRequest?,
+    viewModel: MainViewModel,
+    context: Context,
+) {
+    when (openRequest) {
+        OpenRequest.ConfirmDiscard ->
+            AlertDialog(
+                onDismissRequest = viewModel::cancelOpen,
+                title = { Text(stringResource(R.string.editor_discard_title)) },
+                text = { Text(stringResource(R.string.editor_discard_message)) },
+                confirmButton = {
+                    TextButton(onClick = viewModel::confirmOpen) {
+                        Text(stringResource(R.string.editor_discard_confirm))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = viewModel::cancelOpen) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                },
+            )
+
+        is OpenRequest.ConfirmLargeFile ->
+            AlertDialog(
+                onDismissRequest = viewModel::cancelOpen,
+                title = { Text(stringResource(R.string.editor_large_file_title)) },
+                text = {
+                    Text(
+                        stringResource(
+                            R.string.editor_large_file_message,
+                            openRequest.fileName,
+                            Formatter.formatShortFileSize(context, openRequest.sizeBytes),
+                        ),
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = viewModel::confirmOpen) {
+                        Text(stringResource(R.string.editor_large_file_confirm))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = viewModel::cancelOpen) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                },
+            )
+
+        OpenRequest.Reading, null -> Unit
+    }
+}
+
+@Composable
+private fun documentTitle(
+    documentState: DocumentUiState,
+    dirty: Boolean,
+): String {
+    val name =
+        when (documentState) {
+            DocumentUiState.Untitled -> stringResource(R.string.editor_title_untitled)
+            is DocumentUiState.Opened -> documentState.fileName
+        }
+    return if (dirty) stringResource(R.string.editor_title_modified, name) else name
+}
+
+@Composable
+private fun documentSubtitle(
+    openRequest: OpenRequest?,
+    documentState: DocumentUiState,
+): String? =
+    when {
+        openRequest == OpenRequest.Reading -> stringResource(R.string.editor_reading)
+        documentState is DocumentUiState.Opened && !documentState.canWrite ->
+            stringResource(R.string.editor_read_only)
+        else -> null
+    }
+
+@Composable
+private fun openFailureText(
+    failure: OpenFailure,
+    context: Context,
+): String =
+    when (failure) {
+        OpenFailure.FileNotFound -> stringResource(R.string.editor_open_failed_not_found)
+        OpenFailure.PermissionDenied -> stringResource(R.string.editor_open_failed_permission)
+        is OpenFailure.TooLarge ->
+            stringResource(
+                R.string.editor_open_failed_too_large,
+                Formatter.formatShortFileSize(context, failure.limitBytes),
+            )
+        OpenFailure.ReadFailed -> stringResource(R.string.editor_open_failed_read)
+        is OpenFailure.NotUtf8 -> stringResource(R.string.editor_open_failed_not_utf8)
+        is OpenFailure.UnsupportedEncoding ->
+            stringResource(R.string.editor_open_failed_unsupported, encodingName(failure.kind))
+        OpenFailure.Internal -> stringResource(R.string.editor_open_failed_internal)
+    }
+
+/** Encoding names are technical identifiers, not translated prose. */
+private fun encodingName(kind: UnsupportedEncodingKind): String =
+    when (kind) {
+        UnsupportedEncodingKind.Utf16Le -> "UTF-16 LE"
+        UnsupportedEncodingKind.Utf16Be -> "UTF-16 BE"
+        UnsupportedEncodingKind.Utf32Le -> "UTF-32 LE"
+        UnsupportedEncodingKind.Utf32Be -> "UTF-32 BE"
+        is UnsupportedEncodingKind.Binary -> "binary"
+    }
 
 @Composable
 private fun coreStatusText(state: MainUiState): String =
@@ -157,7 +336,10 @@ private fun editorColors(): EditorColors {
 }
 
 @Composable
-private fun MoreMenuButton() {
+private fun MoreMenuButton(
+    openEnabled: Boolean,
+    onOpenFile: () -> Unit,
+) {
     var showMenu by remember { mutableStateOf(false) }
 
     IconButton(onClick = { showMenu = true }) {
@@ -191,7 +373,11 @@ private fun MoreMenuButton() {
         )
         DropdownMenuItem(
             text = { Text("打开文件") },
-            onClick = { showMenu = false },
+            enabled = openEnabled,
+            onClick = {
+                showMenu = false
+                onOpenFile()
+            },
             trailingIcon = { Icon(FolderOpen, contentDescription = null) },
         )
         DropdownMenuItem(
