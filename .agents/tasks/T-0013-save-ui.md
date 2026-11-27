@@ -3,9 +3,9 @@
 - **ID**：T-0013
 - **里程碑**：M1（A6、A7 的 UI 侧；A12 的“保存”步骤；G4）
 - **类型**：feat
-- **状态**：Ready
+- **状态**：Review
 - **分支**：`feat/m1-t13-save-ui`（本任务单已提交于此；实现继续在同一分支）
-- **负责人**：（未领取）
+- **负责人**：deepseek-v4p1-flash-1017 <> (2026-11-27 16:12 领取)
 - **涉及模块**：state（`MainViewModel`、保存状态）、platform（`DocumentIo` 的“另存为”入口、复用 `AtomicDocumentSaver`）、ui（菜单/工具栏/快捷键、对话框、`strings.xml`）、editor（`Ctrl+S` 回调）、bridge（不改）
 - **相关 skill**：kotlin-compose-ui、testing-qa；涉及 URI 创建与权限时参考 android-build；不改 IME 状态机与 Rust，不需要 rust-core / uniffi-bridge / editor-rendering
 
@@ -200,18 +200,30 @@ sealed interface SaveFailure {
 ## 验收标准
 
 - [ ] **V1** 菜单“保存”、底部工具栏 `Save`、硬件键盘 `Ctrl+S` 三条入口都能触发保存；已打开的可写文档保存后，磁盘字节等于 `encode(format)` 的结果，且再次打开内容一致。
-- [ ] **V2** 保存成功后 `dirty == false`、标题 `*` 消失、`lastSavedVersion == encoded.version`；保存不改变光标、不做撤销步、不递增版本号。
+  - 代码接线完成（三条入口都调用 `MainViewModel.saveDocument()`，JVM 断言保存字节 = `encode`）；`Ctrl+S` 与“保存后重开核对”需要真机/仪器验证（无设备）。
+- [x] **V2** 保存成功后 `dirty == false`、标题 `*` 消失、`lastSavedVersion == encoded.version`；保存不改变光标、不做撤销步、不递增版本号。
+  - `MainViewModelSaveTest.save writes the encoded bytes and clears dirty`。
 - [ ] **V3** A6：UTF-8（无 BOM + LF）、UTF-8 BOM + CRLF 样本经“打开 → 保存”后字节与原文完全一致（仪器测试，全链路含 `AtomicDocumentSaver`）。
+  - `DocumentSaveInstrumentedTest` 已编写并通过 `compileDebugAndroidTestKotlin`，**未在设备上运行**（`adb devices` 为空）。
 - [ ] **V4** A7：注入 `WRITE_ORIGINAL` / `VERIFY` 失败时原文件字节不变，`saveOutcome` 为 `Failed(WriteFailed(stage))`，编辑器内容/光标/版本/`dirty` 不变（仪器 + JVM）。
+  - JVM 覆盖五档 `SaveStage`（`a write failure keeps the document and dirty state untouched`）；仪器用例 `failedSaveKeepsTheOriginalAndReportsTheStage` 未运行。
 - [ ] **V5** `originalPreserved = false`（`SaveStage.RESTORE`）时显示备份路径（AlertDialog），备份文件仍存在、未被删除，错误与 `restoreCause` 记录到 logcat。
-- [ ] **V6** 保存失败后用户可以继续编辑并再次保存；任何失败都不被静默吞掉（未知异常记录堆栈并映射为 `Internal`）。
-- [ ] **V7** 未命名文档与只读文档按 Q-T13-2/3 处理：走另存为时保存成功后文档状态变为 `Opened(新文件名, canWrite = true)`、`currentDocument` 指向新 URI、旧 URI 权限释放、`format()` 保留（BOM/换行按打开时或新文件默认值，见 Q-T13-4 结论）。
-- [ ] **V8** 版本漂移：保存事务期间继续编辑，保存成功后 `dirty` 仍为 `true`，提示文案包含“仍有未保存修改”；不触发自动重存。
-- [ ] **V9** 并发与互斥：保存中重复触发被忽略（`saveJob` 只跑一个）；保存中“打开文件”被禁用且 `openDocument` 不再读取/替换文档，目标 URI 权限不被释放；保存中旋转不丢失事务（`AtomicDocumentSaver` 在 `NonCancellable` 中完成）。
+  - 映射与对话框已实现，JVM 断言 `BackupLost(stage, backupPath)` 与 `restoreCause`/`cause` 进 logger；备份文件保留由 T-0010 的 `AtomicDocumentSaverInstrumentedTest` 覆盖，本任务未新增设备运行。
+- [x] **V6** 保存失败后用户可以继续编辑并再次保存；任何失败都不被静默吞掉（未知异常记录堆栈并映射为 `Internal`）。
+  - `a write failure keeps the document and dirty state untouched`、`unknown save failures are logged and mapped to Internal`、`a failing adopt reports an internal failure without touching the document`。
+- [x] **V7** 未命名文档与只读文档按 Q-T13-2/3 处理：走另存为时保存成功后文档状态变为 `Opened(新文件名, canWrite = true)`、`currentDocument` 指向新 URI、旧 URI 权限释放、`format()` 保留（BOM/换行按打开时或新文件默认值，见 Q-T13-4 结论）。
+  - `untitled documents save as a new file`、`read-only documents save as a new file and drop the old grant`；`documentId` 保持不变以免编辑器重置视口。
+- [x] **V8** 版本漂移：保存事务期间继续编辑，保存成功后 `dirty` 仍为 `true`，提示文案包含“仍有未保存修改”；不触发自动重存。
+  - `edits during the save keep the document dirty`；文案 `editor_saved_dirty`。
+- [x] **V9** 并发与互斥：保存中重复触发被忽略（`saveJob` 只跑一个）；保存中“打开文件”被禁用且 `openDocument` 不再读取/替换文档，目标 URI 权限不被释放；保存中旋转不丢失事务（`AtomicDocumentSaver` 在 `NonCancellable` 中完成）。
+  - `repeated save while the transaction runs is ignored`、`opening is ignored while a save is running`；菜单项在 `isSaving` 时禁用；旋转依赖 `viewModelScope` + `NonCancellable`（T-0010），真机旋转待补。
 - [ ] **V10** 10 MB 文档保存全程不在 UI 线程：`encode` 与 `save` 分别在 `workDispatcher`/`ioDispatcher`；记录 `encode`/`save` 分段耗时到交接记录（设备与文件大小，无设备时注明）。
-- [ ] **V11** 新增用户可见文案全部在 `res/values/strings.xml` 与 `values-zh-rCN/strings.xml`，无新的硬编码中文。
-- [ ] **V12** DoD：`cargo fmt/clippy/test`（不应改 Rust，仍要跑）、`ktlintCheck`、`lintDebug`、`testDebugUnitTest`、`assembleDebug`、`compileDebugAndroidTestKotlin`；有设备时 `connectedDebugAndroidTest`。
-- [ ] **V13** 文档与状态：`architecture.md` §3.2/§3.6、`glossary.md`、`CHANGELOG.md`、`tasks/backlog.md`、本任务单交接记录已更新；未新增依赖、未改 Manifest/权限/签名/包名。
+  - 代码按调度器分层，日志已含 `encode=…ms save=…ms bytes=…`；**未在设备上测 10 MB**（无设备）。
+- [x] **V11** 新增用户可见文案全部在 `res/values/strings.xml` 与 `values-zh-rCN/strings.xml`，无新的硬编码中文。
+  - 新增 10 个字符串在两种语言各一份；`lintDebug` 无 `UnusedResources`。
+- [x] **V12** DoD：`cargo fmt/clippy/test`（不应改 Rust，仍要跑）、`ktlintCheck`、`lintDebug`、`testDebugUnitTest`、`assembleDebug`、`compileDebugAndroidTestKotlin`；有设备时 `connectedDebugAndroidTest`。
+  - 全部通过（命令与结果见交接记录）；无设备，`connectedDebugAndroidTest` 未运行。
+- [x] **V13** 文档与状态：`architecture.md` §3.2/§3.6、`glossary.md`、`CHANGELOG.md`、`tasks/backlog.md`、本任务单交接记录已更新；未新增依赖、未改 Manifest/权限/签名/包名。
 
 ## 计划
 
@@ -245,15 +257,38 @@ cd ..
 
 ## 阻塞
 
-- （无）真机 SAF 创建/权限行为需要 Android 设备；当前 Termux 环境 `adb devices` 可能为空，届时按 T-0007/T-0010/T-0012 的方式在交接记录注明“未运行”并请人类补测。
-- 开工前需要人类回答 Q-T13-1..10（其中 Q-T13-2/3/4 决定范围大小）。
+- 真机验证：当前环境 `adb devices` 为空，仪器测试与手动用例未运行。已用 `compileDebugAndroidTestKotlin` 保证可编译，需人类在有设备的机器上补测 V1（`Ctrl+S`）、“保存后重开核对”、V3/V4（`connectedDebugAndroidTest`）、V5（备份路径对话框外观）、V9（保存中旋转）、V10（10 MB `encode`/`save` 分段耗时）。
+- （解除）开工前需要人类回答 Q-T13-1..10，已于任务单中全部确认。
 
 ## 交接记录
 
-- 日期：
-- 分支与提交：
+- 日期：2026-11-27 17:20
+- 分支与提交：`feat/m1-t13-save-ui`，实现提交 `6d2c705`（`feat(ui): save flow from menu, toolbar and Ctrl+S`），随后一个 `docs(task)` 提交更新本任务单与 backlog。
 - 已完成：
-- 未完成：
-- 测试结果：
-- 基准：
+  - `platform/document`：新增 `DocumentSaver` 接口（`AtomicDocumentSaver` 实现它）、`WritableDocument`、`DocumentIo.adopt`；`ContentResolverDocumentIo.adopt` 取持久权限、复用显示名/路径解析，不读取新建文档。
+  - `state`：新增 `SaveRequest`（`Saving` / `SaveAs(reason, id)`）、`SaveAsReason`（`Untitled`/`ReadOnly`/`Manual`）、`SaveFailure`（`WriteFailed`/`BackupLost`/`Internal`）、`SaveOutcome`（`Saved`/`Failed`）；`MainViewModel.saveDocument` / `saveAsNewDocument` / `saveAs` / `cancelSave` / `dismissSaveOutcome`；`lastLoadedVersion` 重命名为 `lastSavedVersion`，保存后主动重算 `dirty`；保存中拒绝 `openDocument` 与重复保存；保存成功记录 `encode=…ms save=…ms bytes=… version=… stillDirty=…`。
+  - `ui`：菜单“保存”“另存为”、底部工具栏 `Save`、`CreateDocument` 启动器（每个请求只弹一次，旋转安全）、保存中/选择位置副标题、成功/失败 Snackbar、备份丢失 AlertDialog；新增 10 个字符串（en + zh-rCN）。
+  - `editor`：`EditorView.onKeyDown` 识别 `Ctrl+S`（忽略按键重复），`onKeyUp` 吞掉对应抬起事件。
+  - `MainActivity`：注入 `AtomicDocumentSaver(cacheDir)`。
+  - 测试：`MainViewModelSaveTest`（13 个 JVM 用例）、`MainViewModelTest` 补假 saver；仪器 `DocumentSaveInstrumentedTest`（A6 两个样本 + 编辑后仍按 BOM/CRLF 写、A7 经 ViewModel 注入 `WRITE_ORIGINAL` 失败）、`ContentResolverDocumentIoInstrumentedTest` 补 `adopt`；`AtomicDocumentSaverInstrumentedTest` 里的失败注入类改为 `internal` 以复用。
+- 未完成（需人类补测）：`connectedDebugAndroidTest`（无设备）、真机手动用例（V1 的 `Ctrl+S`、V3/V4/V5/V9/V10）。
+- 测试结果（全部在本机实际运行）：
+  ```
+  cd core
+  cargo fmt --all -- --check                -> FMT_OK
+  cargo clippy --workspace --all-targets -- -D warnings -> Finished (无警告)
+  cargo test --workspace                    -> 各 crate 全部 ok，0 failed
+  cd ..
+  ./gradlew --offline :app:ktlintCheck :app:lintDebug :app:testDebugUnitTest \
+      :app:assembleDebug :app:compileDebugAndroidTestKotlin
+      -> BUILD SUCCESSFUL in 46s
+  ```
+  - JVM 用例数（`app/build/test-results/testDebugUnitTest/`）：`EditorInputHandlerTest` 18、`Utf8OffsetsTest` 4、`AtomicDocumentSaverTest` 10、`MainViewModelSaveTest` 13、`MainViewModelTest` 15；`failures=0 errors=0`。
+  - `lintDebug`：22 条既有 warning/hint（`Aligned16KB`、`GradleDependency`、`ComposableNaming`、`ViewConstructor` 等），无新增类别；本任务引入的 `UnusedResources` 已删除。
+  - `connectedDebugAndroidTest`：未运行（`adb devices` 无设备）。
+- 基准：未测量。无设备，10 MB 文档的 `encode`/`save` 分段耗时留给人类设备补测（日志已带单位与字节数）。
 - 下一步建议：
+  1. 在有设备的机器上跑 `./gradlew :app:connectedDebugAndroidTest`，并补真机用例（`Ctrl+S`、只读/未命名另存为、保存中旋转、10 MB 分段耗时）。
+  2. 真机确认 `ACTION_CREATE_DOCUMENT` 返回的 URI 能被 `takePersistableUriPermission` 持久化；若某 provider 拒绝，当前策略是回退 `canWrite = false`（与打开一致，下次保存会再次提示选位置）——如体验不可接受，新建 backlog 条目讨论“临时权限内直接可写”。
+  3. 审查时重点看 `MainViewModel.runSave` 的串行化（V9）、`saveAs` 切换文档不重置视口（V7）、以及 `MainScreen` 的 `CreateDocument` 一次性启动（旋转安全）。
+  4. A12 的 Compose 全流程（打开 → 输入 → 撤销 → 保存 → 重开）仍由 T-0024 覆盖。

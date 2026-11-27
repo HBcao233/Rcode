@@ -48,8 +48,9 @@ Kotlin 不得缓存完整文本副本作为权威数据。
 - **所有权**：跨 FFI 传递的字符串统一使用 UTF-8；行号、偏移量统一定义为字节偏移与“字符（Unicode scalar）”两套，接口注释必须写清楚使用哪一套。
 - **换行**：缓冲区内部只把 `\n` 当作换行符。CRLF 自然算一个换行，`\r` 不计入行内容；单独的 `\r`、U+2028 等是普通字符。BOM 与换行由 `rcode-fs::codec`（T-0009）检测与还原：`decode` 剥掉 BOM 并把 `\r\n` 归一化为 `\n`，`encode` 按记录的 `DocumentFormat`（是否 BOM + 单一换行形式）写回。因此**缓冲区文本不含 BOM、只含 `\n`**。文件的换行形式混合时只记录主导形式，保存时统一为它（Q-T9-2，见 `core/crates/rcode-fs/README.md`）。
 - **打开**：`EditorSession::open(bytes)`（T-0011）在 Rust 内调用 `codec::decode`：解码在锁外完成，失败时不动文档；成功后在同一把锁内 `TextBuffer::reset`（整体替换，版本 +1）、`clear_history()`、光标归零、把 `codec::decode` 得到的 `DocumentFormat` 存入会话。会话因此持有保存所需格式，Kotlin 用 `format()` 取值再调用 `encode(format)`；Kotlin 不自己记录格式，也不把打开当作编辑。
-- **打开链路（Kotlin，T-0012）**：`MainScreen` 用 `ACTION_OPEN_DOCUMENT` 选文件（无 MIME 过滤，Q-T12-1；请求读写持久权限，Q-T12-2），`platform/document/ContentResolverDocumentIo` 按 URI 读出整个文件字节（一次性 `ByteArray`，硬上限 64 MiB，Q-T12-3；显示名取 `OpenableColumns.DISPLAY_NAME`，失败回退 URI 末段）。`MainViewModel` 在 I/O 调度器读字节、在工作调度器调用 `session.open(bytes)`，Kotlin 只传字节、不解析文本（§3.1）。读取结果超过 10 MiB 时先让用户确认（Q6）；读取/权限/超限/非 UTF-8 等失败映射为 `OpenFailure`，会话与当前文档保持不变；打开前若 `session.version() != lastLoadedVersion` 先确认丢弃未保存修改。打开成功后 UI 调 `EditorView.onDocumentOpened()` 重置视口并 `restartInput`（Q-T12-6），并释放上一个 URI 的持久权限（Q-T12-5）。
+- **打开链路（Kotlin，T-0012）**：`MainScreen` 用 `ACTION_OPEN_DOCUMENT` 选文件（无 MIME 过滤，Q-T12-1；请求读写持久权限，Q-T12-2），`platform/document/ContentResolverDocumentIo` 按 URI 读出整个文件字节（一次性 `ByteArray`，硬上限 64 MiB，Q-T12-3；显示名取 `OpenableColumns.DISPLAY_NAME`，失败回退 URI 末段）。`MainViewModel` 在 I/O 调度器读字节、在工作调度器调用 `session.open(bytes)`，Kotlin 只传字节、不解析文本（§3.1）。读取结果超过 10 MiB 时先让用户确认（Q6）；读取/权限/超限/非 UTF-8 等失败映射为 `OpenFailure`，会话与当前文档保持不变；打开前若 `session.version() != lastSavedVersion`（T-0012 时名为 `lastLoadedVersion`）先确认丢弃未保存修改。打开成功后 UI 调 `EditorView.onDocumentOpened()` 重置视口并 `restartInput`（Q-T12-6），并释放上一个 URI 的持久权限（Q-T12-5）。
 - **保存编码**：保存时由 `EditorSession::encode(format)`（T-0010）在 Rust 内调用 `codec::encode_into` 生成字节，并在同一把锁内取文本快照与版本号；Kotlin 只负责把字节写入 URI，不得用 `text()` 自行编码（违反 §3.1 并重复 codec 逻辑）。
+- **保存链路（Kotlin，T-0013）**：`MainViewModel.saveDocument()` 取 `session.format()` 与 `encode(format)`（在 `workDispatcher`）→ `DocumentSaver.save(savable, bytes)`（生产实现 `AtomicDocumentSaver`，内部切到 I/O 调度器并在 `NonCancellable` 中完成事务）→ 成功时把 `lastSavedVersion` 置为 `encoded.version` 并重算 `dirty = session.version() != lastSavedVersion`（保存期间继续编辑即版本漂移，仍为脏，Q-T13-5）。入口有菜单“保存”、底部工具栏 `Save` 与硬件键盘 `Ctrl+S`（`EditorView.onKeyDown` 回调）。未命名文档与只读文档（`canWrite == false`）不能原地写，走 `ACTION_CREATE_DOCUMENT` 另存为：`DocumentIo.adopt(key)` 取持久权限并包装成 `WritableDocument`（不读取内容），保存成功后当前文档切换到新 URI、释放旧 URI 权限，`documentId` 不变以免编辑器重置视口。保存中忽略打开与重复保存请求，避免 `release` 在事务中途释放目标 URI 权限（Q-T13-7）。失败按 `SaveStage` 映射为 `SaveFailure`（`WriteFailed`/`BackupLost`/`Internal`），异常进 logcat、`backupPath` 由 AlertDialog 展示（V5）。
 - **撤销/重做**：历史在 `rcode-buffer::history`，与文本同锁；一次 undo 回放一个撤销组（§3.3）。`open` 内部已经清空历史，所以加载本身不是可撤销步骤（T-0011）；其它方式替换文本后必须自己调 `clear_history()`（T-0012）。
 - **IME 组合**：组合输入只在 Kotlin 侧有区间；`EditorInputHandler` 用 `begin_composition()` / `end_composition()` 把一次组合的编辑合并为一个撤销组，组合期间不产生独立撤销步（T-0008）。
 
@@ -78,6 +79,7 @@ Kotlin 不得缓存完整文本副本作为权威数据。
 - 不使用数据库，除非 M2 之后出现明确需求。
 - **保存事务**（T-0010）：Kotlin `platform/document/AtomicDocumentSaver` 先在 `cacheDir/save/` 写入新字节，再备份原文件，然后用 `"wt"` 截断覆盖并回读校验；任何可捕获的失败都用备份回滚。事务主体在 `NonCancellable` 中执行，同一 saver 实例用 `Mutex` 串行化。
 - **保证边界（Q-T10-1、Q-T10-2）**：只保证**失败原子性**——可捕获的 I/O/校验失败后，原文件字节与保存前一致（A7）。不保证进程在“截断原文件之后、回滚完成之前”被系统杀死时的磁盘一致性；此时保存未报告成功，未保存内容由草稿（T-0022/T-0023，G4）兜底。磁盘级崩溃恢复（journal、启动检查）留到 M2 评估。
+- **保存事务的调用方（T-0013）**：`MainViewModel` 只通过 `DocumentSaver` 接口调用事务（JVM 测试用假实现），并在保存期间拒绝打开/另存为，保证 `AtomicDocumentSaver` 运行期间目标 URI 的持久权限不被释放。事务返回的字节数与 `encode`/`save` 分段耗时进 logcat（`rcode-open` 标签），供 T-0025 对照 A1。
 
 ## 4. 目录结构（规划）
 

@@ -35,7 +35,10 @@
 | DocumentFormat | codec 输出的保存格式：是否带 BOM + 单一换行形式；新建文件为无 BOM + LF |
 | 批量取行 | 一次 FFI 调用返回整屏行（`viewport(first_line, max_lines)`），含版本号、行数、行首字节偏移、行文本与光标；禁止逐行/逐字符调用（T-0011） |
 | 文档句柄（document key） | 当前打开文件的 Kotlin 侧标识：`DocumentKey`（SAF URI 字符串）+ 显示名 + `SavableDocument` + `canWrite` + 打开时的版本。Kotlin 只保存这些，不保存全文（T-0012） |
-| 脏状态（dirty） | 会话版本与“最近一次打开/保存的版本”不一致：T-0012 用 `session.version() != lastLoadedVersion`，T-0013 接保存后改为最近保存版本。标题后缀 `*` 据此显示（Q-T12-4） |
+| 脏状态（dirty） | 会话版本与“最近一次成功保存的版本”不一致：`session.version() != lastSavedVersion`，打开成功时 `lastSavedVersion = opened.version`，保存成功时置为 `encoded.version`。标题后缀 `*` 据此显示（Q-T12-4、Q-T13-5） |
+| 保存版本（saved version） | 最近一次**成功**保存的 `EncodedDocument.version`；打开文件时初始化为 `open` 返回的版本。只用于比较，不解析文本 |
+| 版本漂移（version drift） | 保存事务期间用户继续编辑，使 `session.version() != encoded.version`：磁盘上是旧文本、缓冲区是新文本。保存仍算成功，但 `dirty` 保持为真并提示“仍有未保存修改”（Q-T13-5） |
+| 另存为（save as） | 通过 `ACTION_CREATE_DOCUMENT` 新建文档并把当前文本写入它；未命名文档与只读文档（`canWrite == false`）只能这样保存。成功后当前文档切换到新 URI，旧 URI 的持久权限释放（Q-T13-2/3/4） |
 | 大文件确认（large-file confirmation） | 读到的字节数超过 10 MiB（Q6）时弹出、由用户决定是否继续打开；读取硬上限 64 MiB（Q-T12-3） |
 | Macrobenchmark | Jetpack 提供的启动与滚动性能测试库 |
 | 失败原子性（failure atomicity） | 一次操作要么完全成功，要么保持操作前的状态。Rcode 的保存只对可捕获的 I/O/校验失败保证它（A7）：失败后原文件字节不变；进程被杀死导致的磁盘不一致不在保证范围（Q-T10-2） |

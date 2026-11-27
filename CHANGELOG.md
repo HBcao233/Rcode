@@ -173,3 +173,37 @@ All notable changes are documented here. Format follows Keep a Changelog.
   (`TextOverflow.StartEllipsis`) so the end of the path stays visible; a read-only
   document shows `<read-only marker> · <path>` and the marker keeps its own text
   node, so the ellipsis can never swallow it.
+
+### T-0013 (save flow in the UI: encode → atomic write → feedback)
+- Added `platform/document/DocumentSaver` (the save transaction the UI drives;
+  `AtomicDocumentSaver` now implements it) and `DocumentIo.adopt(WritableDocument)`
+  for `ACTION_CREATE_DOCUMENT` results: the persisted grant is taken without reading
+  the created document, and providers that refuse it still yield a handle with
+  `canWrite = false` instead of an exception.
+- Added the save state machine to `MainViewModel`: `saveDocument()` encodes with
+  `session.format()` on the work dispatcher and writes through `DocumentSaver`, then
+  sets `lastSavedVersion = encoded.version` and recomputes `dirty`. `dirty` now
+  compares against the last **saved** version (renamed from `lastLoadedVersion`), so
+  edits made while a save is running leave the document dirty (version drift,
+  Q-T13-5) instead of being silently reported as saved. Untitled and read-only
+  documents go through `saveAs()`; a successful save-as switches the current URI to
+  the new document, keeps `documentId` (the editor must not reset its viewport) and
+  releases the old grant (Q-T13-2/3/4). Opening and repeated saves are ignored while
+  a save is pending or running, so a save transaction can never lose its URI grant
+  midway (Q-T13-7).
+- Added `SaveRequest`/`SaveAsReason`/`SaveFailure`/`SaveOutcome` to `state`. Failures
+  are mapped from `SaveStage` to stage-level text (`WRITE_TEMP`/`READ_ORIGINAL`:
+  original untouched; `WRITE_ORIGINAL`/`VERIFY`: original restored); a failed restore
+  surfaces the kept backup path in a dialog (V5) and unexpected exceptions are logged
+  and reported as `Internal`, never swallowed.
+- Added the save entries: the menu "保存"/"另存为" items, the bottom toolbar `Save`
+  button and the hardware `Ctrl+S` shortcut (`EditorView.onKeyDown`), a
+  `CreateDocument` picker launched once per request (rotation-safe), a "saving…"
+  subtitle, success/failure snackbars and the backup-path dialog. All new strings
+  are in `values/strings.xml` and `values-zh-rCN/strings.xml`.
+- Added JVM tests for the save state machine (success, version drift, every
+  `SaveStage`, lost backup, unknown exceptions, untitled/read-only save-as, menu
+  save-as, ignored repeats and opens, cancelled picker, failing adopt, one-shot
+  outcome) and instrumented tests for A6 through the production chain
+  (`DocumentIo.open` → `EditorSession.open` → `encode` → `AtomicDocumentSaver`) plus
+  A7 through the view model and `adopt` on a device.
