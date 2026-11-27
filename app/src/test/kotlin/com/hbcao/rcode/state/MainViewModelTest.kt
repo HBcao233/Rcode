@@ -112,7 +112,10 @@ class MainViewModelTest {
             viewModel.openDocument(key)
             advanceUntilIdle()
 
-            assertEquals(DocumentUiState.Opened("a.txt", canWrite = true, documentId = 1), viewModel.documentState.value)
+            assertEquals(
+                DocumentUiState.Opened("a.txt", path = "content://test/a.txt", canWrite = true, documentId = 1),
+                viewModel.documentState.value,
+            )
             assertNull(viewModel.openRequest.value)
             assertNull(viewModel.openError.value)
             assertEquals("hello\n", session.text())
@@ -133,7 +136,7 @@ class MainViewModelTest {
             advanceUntilIdle()
 
             assertEquals(
-                DocumentUiState.Opened("ro.txt", canWrite = false, documentId = 1),
+                DocumentUiState.Opened("ro.txt", path = "content://test/ro.txt", canWrite = false, documentId = 1),
                 viewModel.documentState.value,
             )
         }
@@ -156,7 +159,10 @@ class MainViewModelTest {
             viewModel.confirmOpen()
             advanceUntilIdle()
 
-            assertEquals(DocumentUiState.Opened("big.txt", canWrite = true, documentId = 1), viewModel.documentState.value)
+            assertEquals(
+                DocumentUiState.Opened("big.txt", path = "content://test/big.txt", canWrite = true, documentId = 1),
+                viewModel.documentState.value,
+            )
             assertEquals("0123456789", session.text())
             assertNull(viewModel.openRequest.value)
         }
@@ -321,7 +327,10 @@ class MainViewModelTest {
             viewModel.confirmOpen()
             advanceUntilIdle()
 
-            assertEquals(DocumentUiState.Opened("b.txt", canWrite = true, documentId = 2), viewModel.documentState.value)
+            assertEquals(
+                DocumentUiState.Opened("b.txt", path = "content://test/b.txt", canWrite = true, documentId = 2),
+                viewModel.documentState.value,
+            )
             assertEquals("beta", session.text())
             assertFalse(viewModel.dirty.value)
             assertEquals(listOf(first), io.released)
@@ -372,7 +381,10 @@ class MainViewModelTest {
             gate.complete(Unit)
             advanceUntilIdle()
 
-            assertEquals(DocumentUiState.Opened("a.txt", canWrite = true, documentId = 1), viewModel.documentState.value)
+            assertEquals(
+                DocumentUiState.Opened("a.txt", path = "content://test/a.txt", canWrite = true, documentId = 1),
+                viewModel.documentState.value,
+            )
             assertEquals("alpha", viewModel.editorSession.text())
         }
 
@@ -412,7 +424,10 @@ class MainViewModelTest {
             viewModel.openDocument(key)
             advanceUntilIdle()
 
-            assertEquals(DocumentUiState.Opened("a.txt", canWrite = true, documentId = 2), viewModel.documentState.value)
+            assertEquals(
+                DocumentUiState.Opened("a.txt", path = "content://test/a.txt", canWrite = true, documentId = 2),
+                viewModel.documentState.value,
+            )
             assertTrue(io.released.isEmpty())
         }
 
@@ -441,6 +456,7 @@ class MainViewModelTest {
 private class FakeDocumentIo : DocumentIo {
     private val documents = mutableMapOf<DocumentKey, ByteArray>()
     private val names = mutableMapOf<DocumentKey, String>()
+    private val paths = mutableMapOf<DocumentKey, String>()
     private val writable = mutableMapOf<DocumentKey, Boolean>()
 
     /** [SavableDocument] per key, so tests can assert the handle handed to T-0013. */
@@ -458,9 +474,11 @@ private class FakeDocumentIo : DocumentIo {
         text: String,
         displayName: String = key.uri.substringAfterLast('/'),
         canWrite: Boolean = true,
+        path: String = key.uri,
     ) {
         documents[key] = text.encodeToByteArray()
         names[key] = displayName
+        paths[key] = path
         writable[key] = canWrite
         savables[key] = FakeSavableDocument(key.uri, canWrite)
     }
@@ -473,6 +491,7 @@ private class FakeDocumentIo : DocumentIo {
         return ReadDocument(
             key = key,
             displayName = names.getValue(key),
+            path = paths.getValue(key),
             bytes = bytes,
             canWrite = writable.getValue(key),
             savable = savables.getValue(key),

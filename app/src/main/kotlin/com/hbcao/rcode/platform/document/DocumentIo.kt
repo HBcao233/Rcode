@@ -19,6 +19,7 @@ value class DocumentKey(
  * ([bytes] can be tens of MiB).
  *
  * @property displayName provider display name, or the URI's last path segment.
+ * @property path best-effort readable location (see [documentPath]); shown in the header.
  * @property canWrite `true` when a persisted **write** grant was obtained, so the
  * save flow (T-0013) can overwrite the document in place.
  * @property savable handle for the save transaction, backed by the same URI.
@@ -26,6 +27,7 @@ value class DocumentKey(
 class ReadDocument(
     val key: DocumentKey,
     val displayName: String,
+    val path: String,
     val bytes: ByteArray,
     val canWrite: Boolean,
     val savable: SavableDocument,

@@ -166,3 +166,8 @@ All notable changes are documented here. Format follows Keep a Changelog.
   `ContentResolverDocumentIo` (whole-document read, display-name fallback, size cap,
   not-found, no-op release, BOM+CRLF round trip through the session) and for the
   viewport reset after opening.
+- Changed: the header subtitle under the file name now shows where the document
+  lives instead of staying empty — the real path for `file://`, `<volume root>/...`
+  for the external-storage provider (`/storage/emulated/0/...`, `/storage/<id>/...`),
+  and the decoded URI for other providers. Long paths are front-ellipsized
+  (`TextOverflow.StartEllipsis`) so the end of the path stays visible.

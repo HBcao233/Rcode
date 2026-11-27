@@ -17,12 +17,15 @@ sealed interface DocumentUiState {
      * A file opened through SAF.
      *
      * @property fileName provider display name, or the URI's last path segment.
+     * @property path best-effort readable location, shown as the header subtitle; the UI
+     *   front-ellipsizes long values.
      * @property canWrite `false` when only a read grant was obtained (read-only file).
      * @property documentId increments on every successful open, so the editor view can
      * reset its viewport even when the same file is opened twice.
      */
     data class Opened(
         val fileName: String,
+        val path: String,
         val canWrite: Boolean,
         val documentId: Long,
     ) : DocumentUiState

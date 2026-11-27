@@ -177,7 +177,8 @@ class MainViewModel(
             lastLoadedVersion = opened.version
             _dirty.value = false
             documentId += 1
-            _documentState.value = DocumentUiState.Opened(document.displayName, document.canWrite, documentId)
+            _documentState.value =
+                DocumentUiState.Opened(document.displayName, document.path, document.canWrite, documentId)
             logger(
                 "open: read=${readNanos / NANOS_PER_MILLI}ms" +
                     " decode=${openNanos / NANOS_PER_MILLI}ms" +

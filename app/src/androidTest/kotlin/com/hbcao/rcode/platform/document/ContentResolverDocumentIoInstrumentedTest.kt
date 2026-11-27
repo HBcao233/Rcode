@@ -40,6 +40,7 @@ class ContentResolverDocumentIoInstrumentedTest {
                     assertArrayEquals(ORIGINAL, document.bytes)
                     // `file://` has no OpenableColumns, so the fallback must kick in.
                     assertEquals(file.name, document.displayName)
+                    assertEquals(file.path, document.path)
                     assertFalse(document.canWrite)
                     assertArrayEquals(ORIGINAL, document.savable.openRead().use { it.readBytes() })
                 } finally {
@@ -103,6 +104,37 @@ class ContentResolverDocumentIoInstrumentedTest {
                 ContentResolverDocumentIo(resolver).release(key)
             }
         }
+
+    @Test
+    fun documentPathsPreferRealDirectories() {
+        val primaryRoot = "/storage/emulated/0"
+        val file = File(context.cacheDir, "notes.txt")
+
+        assertEquals(file.path, documentPath(Uri.fromFile(file)))
+        assertEquals(
+            "$primaryRoot/Notes/todo.txt",
+            documentPath(
+                Uri.parse("content://com.android.externalstorage.documents/document/primary%3ANotes%2Ftodo.txt"),
+                primaryRoot,
+            ),
+        )
+        assertEquals(
+            "/storage/1A2B-3C4D/Notes/todo.txt",
+            documentPath(
+                Uri.parse("content://com.android.externalstorage.documents/document/1A2B-3C4D%3ANotes%2Ftodo.txt"),
+                primaryRoot,
+            ),
+        )
+        assertEquals(
+            primaryRoot,
+            documentPath(Uri.parse("content://com.android.externalstorage.documents/document/primary%3A"), primaryRoot),
+        )
+        // Providers whose document ids are not paths keep their decoded URI.
+        assertEquals(
+            "content://com.example.provider/document/42",
+            documentPath(Uri.parse("content://com.example.provider/document/42"), primaryRoot),
+        )
+    }
 
     private suspend fun withFile(
         contents: ByteArray,

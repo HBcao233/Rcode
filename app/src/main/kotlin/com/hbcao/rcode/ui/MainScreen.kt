@@ -49,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -126,12 +127,14 @@ fun MainScreen(viewModel: MainViewModel) {
                             text = documentTitle(documentState, dirty),
                             style = MaterialTheme.typography.titleMedium,
                         )
-                        documentSubtitle(openRequest, documentState)?.let { subtitle ->
-                            Text(
-                                text = subtitle,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
+                        Text(
+                            text = documentSubtitle(openRequest, documentState),
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            // Long document paths keep their end: the file name
+                            // stays visible (T-0013).
+                            overflow = TextOverflow.StartEllipsis,
+                        )
                     }
                 },
                 navigationIcon = {
@@ -283,6 +286,7 @@ private fun documentSubtitle(
         openRequest == OpenRequest.Reading -> stringResource(R.string.editor_reading)
         documentState is DocumentUiState.Opened && !documentState.canWrite ->
             stringResource(R.string.editor_read_only)
+        documentState is DocumentUiState.Opened -> documentState.path
         else -> null
     }
 

@@ -3,6 +3,8 @@ package com.hbcao.rcode.platform.document
 import android.content.ContentResolver
 import android.content.Intent
 import android.net.Uri
+import android.os.Environment
+import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.util.Log
 import java.io.ByteArrayOutputStream
@@ -11,6 +13,51 @@ import java.io.IOException
 
 /** Wraps a URI returned by the SAF picker into a [DocumentKey]. */
 fun Uri.toDocumentKey(): DocumentKey = DocumentKey(toString())
+
+/** Volume prefix of the primary external storage in a documents-provider id. */
+private const val PRIMARY_VOLUME = "primary"
+
+/** Removable-volume id in a documents-provider id, e.g. `1A2B-3C4D`. */
+private val VOLUME_ID = Regex("\\A[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}\\z")
+
+/**
+ * Best-effort human-readable location for [uri], used as the header subtitle.
+ *
+ * `file://` URIs give the file path. Documents-provider URIs from the external-storage
+ * provider give `<volume root>/<document path>`: the primary volume maps to
+ * [primaryRoot] and a removable one to `/storage/<volume id>`. Other providers (and
+ * document ids that cannot be mapped) keep the decoded URI, which is the only stable
+ * address they expose.
+ *
+ * The result can be long; the UI front-ellipsizes it (`TextOverflow.StartEllipsis`).
+ */
+@Suppress("DEPRECATION") // Environment.getExternalStorageDirectory still names the primary volume.
+internal fun documentPath(
+    uri: Uri,
+    primaryRoot: String = Environment.getExternalStorageDirectory().absolutePath,
+): String {
+    if (uri.scheme == ContentResolver.SCHEME_FILE) return uri.path ?: uri.toString()
+    if (uri.scheme != ContentResolver.SCHEME_CONTENT) return uri.toString()
+
+    val documentId =
+        try {
+            DocumentsContract.getDocumentId(uri)
+        } catch (e: IllegalArgumentException) {
+            // Not a documents-provider URI (downloads, third-party providers, ...).
+            null
+        } ?: return Uri.decode(uri.toString())
+    val separator = documentId.indexOf(':')
+    if (separator <= 0) return Uri.decode(uri.toString())
+    val volume = documentId.substring(0, separator)
+    val relative = documentId.substring(separator + 1)
+    val root =
+        when {
+            volume == PRIMARY_VOLUME -> primaryRoot
+            VOLUME_ID.matches(volume) -> "/storage/$volume"
+            else -> return Uri.decode(uri.toString())
+        }
+    return if (relative.isEmpty()) root else "$root/$relative"
+}
 
 /**
  * Production [DocumentIo] backed by [ContentResolver] (T-0012).
@@ -36,6 +83,7 @@ class ContentResolverDocumentIo(
         return ReadDocument(
             key = key,
             displayName = displayName,
+            path = documentPath(uri),
             bytes = bytes,
             canWrite = canWrite,
             savable = ContentResolverDocument(resolver, uri),
