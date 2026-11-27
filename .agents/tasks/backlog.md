@@ -44,12 +44,6 @@
 
 ## Backlog
 
-### 文件读写
-- [ ] **T-0013 保存流程接入 UI**（依赖 T-0010、T-0012）
-  - 任务单 `T-0013-save-ui.md` - Review（实现完成，JVM/构建/lint 通过；仪器与真机用例待人类补测）
-  - 范围：保存菜单/工具栏/`Ctrl+S` → Rust `encode(format)` → `AtomicDocumentSaver`；成功/失败反馈、脏状态改为“最近保存版本”、未命名与只读文档的另存为入口。
-  - 验收：保存按钮与快捷路径可用；保存成功/失败有反馈；A6、A7 的仪器测试通过。
-
 ### 编辑器视图
 
 - [ ] **T-0014 Canvas 可见行渲染**（依赖 T-0011、T-0012）
@@ -57,8 +51,8 @@
   - 范围：自定义 Canvas 只绘制可见行；行布局缓存按版本号失效；视口 + 预取一屏。
   - 验收：10 MB 文件可滚动；A1 首屏 < 500 ms 的初版测量结果已记录。
   - 相关 skill：editor-rendering、perf-benchmark
-- [ ] **T-0028 撤销/重做 UI 与 IME 快捷键接**
-  - 范围：按钮； Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y；updateSelection + enable 状态。
+- [ ] **T-0028 键盘A-Z 与 IME 快捷键接线**
+  - 范围：按钮； Ctrl+S/Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y；updateSelection + enable 状态。
 - [ ] **T-0015 光标（触摸）**（依赖 T-0014）
   - 验收：单击定位光标；光标位置由 Rust 返回的字符偏移决定。
 - [ ] **T-0016 选区**（依赖 T-0015）
@@ -145,6 +139,12 @@
   - 范围：Kotlin 通过 SAF 选择并读取 URI 字节，交给 Rust 解码；错误映射为 UI 状态。
   - 验收：选择文件后可进入编辑；读取失败有可见错误提示；不吞异常。
   - 备注：仅通过手动安装apk 确认 SAF 可以打开并读取文件，`connectedDebugAndroidTest` 未跑
+
+### 文件读写
+- [x] **T-0013 保存流程接入 UI**（依赖 T-0010、T-0012）
+  - 任务单 `T-0013-save-ui.md` - Reviewed
+  - 范围：保存菜单/工具栏 → Rust `encode(format)` → `AtomicDocumentSaver`；成功/失败反馈、脏状态改为“最近保存版本”、未命名与只读文档的另存为入口。
+  - 验收：保存按钮与快捷路径可用；保存成功/失败有反馈；A6、A7 的仪器测试通过。
 
 ## 阻塞
 

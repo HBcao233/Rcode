@@ -3,7 +3,7 @@
 - **ID**：T-0013
 - **里程碑**：M1（A6、A7 的 UI 侧；A12 的“保存”步骤；G4）
 - **类型**：feat
-- **状态**：Review
+- **状态**：Reviewed by HBcao
 - **分支**：`feat/m1-t13-save-ui`（本任务单已提交于此；实现继续在同一分支）
 - **负责人**：deepseek-v4p1-flash-1017 <> (2026-11-27 16:12 领取)
 - **涉及模块**：state（`MainViewModel`、保存状态）、platform（`DocumentIo` 的“另存为”入口、复用 `AtomicDocumentSaver`）、ui（菜单/工具栏/快捷键、对话框、`strings.xml`）、editor（`Ctrl+S` 回调）、bridge（不改）
@@ -199,8 +199,8 @@ sealed interface SaveFailure {
 
 ## 验收标准
 
-- [ ] **V1** 菜单“保存”、底部工具栏 `Save`、硬件键盘 `Ctrl+S` 三条入口都能触发保存；已打开的可写文档保存后，磁盘字节等于 `encode(format)` 的结果，且再次打开内容一致。
-  - 代码接线完成（三条入口都调用 `MainViewModel.saveDocument()`，JVM 断言保存字节 = `encode`）；`Ctrl+S` 与“保存后重开核对”需要真机/仪器验证（无设备）。
+- [x] **V1** 菜单“保存”、底部工具栏 `Save`、硬件键盘 `Ctrl+S` 三条入口都能触发保存；已打开的可写文档保存后，磁盘字节等于 `encode(format)` 的结果，且再次打开内容一致。
+  - 代码接线完成（三条入口都调用 `MainViewModel.saveDocument()`，JVM 断言保存字节 = `encode`）；`Ctrl+S` 与“保存后重开核对”已真机验证。
 - [x] **V2** 保存成功后 `dirty == false`、标题 `*` 消失、`lastSavedVersion == encoded.version`；保存不改变光标、不做撤销步、不递增版本号。
   - `MainViewModelSaveTest.save writes the encoded bytes and clears dirty`。
 - [ ] **V3** A6：UTF-8（无 BOM + LF）、UTF-8 BOM + CRLF 样本经“打开 → 保存”后字节与原文完全一致（仪器测试，全链路含 `AtomicDocumentSaver`）。
