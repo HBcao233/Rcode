@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -270,49 +271,77 @@ private fun provideRow1Items(): List<ActionItem> =
         ActionItem(
             id = "row1_1",
             icon = {
-                Icon(KeyboardTab, contentDescription = "Tab")
+                Icon(
+                    KeyboardTab,
+                    contentDescription = "Tab",
+                    modifier = Modifier.size(20.dp),
+                )
             },
             onClick = {},
         ),
         ActionItem(
             id = "row1_2",
             icon = {
-                Text(text = "SHFT", style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                Text(
+                    text = "SHFT",
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                )
             },
             onClick = {},
         ),
         ActionItem(
             id = "row1_3",
             icon = {
-                Icon(Undo, contentDescription = "Undo")
+                Icon(
+                    Undo,
+                    contentDescription = "Undo",
+                    modifier = Modifier.size(20.dp),
+                )
             },
             onClick = {},
         ),
         ActionItem(
             id = "row1_4",
             icon = {
-                Icon(Redo, contentDescription = "Redo")
+                Icon(
+                    Redo,
+                    contentDescription = "Redo",
+                    modifier = Modifier.size(20.dp),
+                )
             },
             onClick = {},
         ),
         ActionItem(
             id = "row1_5",
             icon = {
-                Icon(Icons.Filled.Search, contentDescription = "Search")
+                Icon(
+                    Icons.Filled.Search,
+                    contentDescription = "Search",
+                    modifier = Modifier.size(20.dp),
+                )
             },
             onClick = {},
         ),
         ActionItem(
             id = "row1_6",
             icon = {
-                Icon(Save, contentDescription = "Save")
+                Icon(
+                    Save,
+                    contentDescription = "Save",
+                    modifier = Modifier.size(20.dp),
+                )
             },
             onClick = {},
         ),
         ActionItem(
             id = "row1_7",
             icon = {
-                Icon(MoreHoriz, contentDescription = "More")
+                Icon(
+                    MoreHoriz,
+                    contentDescription = "More",
+                    modifier = Modifier.size(20.dp),
+                )
             },
             onClick = {},
         ),
@@ -323,49 +352,89 @@ private fun provideRow2Items(): List<ActionItem> =
         ActionItem(
             id = "row2_0",
             icon = {
-                Icon(KeyboardArrowLeft, contentDescription = "Left")
+                Icon(
+                    KeyboardArrowLeft,
+                    contentDescription = "Left",
+                    modifier = Modifier.size(20.dp),
+                )
             },
             onClick = {},
         ),
         ActionItem(
             id = "row2_1",
             icon = {
-                Icon(KeyboardArrowRight, contentDescription = "Right")
+                Icon(
+                    KeyboardArrowRight,
+                    contentDescription = "Right",
+                    modifier = Modifier.size(20.dp),
+                )
             },
             onClick = {},
         ),
         ActionItem(
             id = "row2_2",
             icon = {
-                Icon(KeyboardArrowUp, contentDescription = "Up")
+                Icon(
+                    KeyboardArrowUp,
+                    contentDescription = "Up",
+                    modifier = Modifier.size(20.dp),
+                )
             },
             onClick = {},
         ),
         ActionItem(
             id = "row2_3",
             icon = {
-                Icon(KeyboardArrowDown, contentDescription = "Down")
+                Icon(
+                    KeyboardArrowDown,
+                    contentDescription = "Down",
+                    modifier = Modifier.size(20.dp),
+                )
             },
             onClick = {},
         ),
         ActionItem(
             id = "row2_4",
-            icon = { Text(text = "{", style = MaterialTheme.typography.labelSmall, maxLines = 1) },
+            icon = {
+                Text(
+                    text = "{",
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                )
+            },
             onClick = {},
         ),
         ActionItem(
             id = "row2_5",
-            icon = { Text(text = "}", style = MaterialTheme.typography.labelSmall, maxLines = 1) },
+            icon = {
+                Text(
+                    text = "}",
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                )
+            },
             onClick = {},
         ),
         ActionItem(
             id = "row2_6",
-            icon = { Text(text = "[", style = MaterialTheme.typography.labelSmall, maxLines = 1) },
+            icon = {
+                Text(
+                    text = "[",
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                )
+            },
             onClick = {},
         ),
         ActionItem(
             id = "row2_7",
-            icon = { Text(text = "]", style = MaterialTheme.typography.labelSmall, maxLines = 1) },
+            icon = {
+                Text(
+                    text = "]",
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                )
+            },
             onClick = {},
         ),
     )
