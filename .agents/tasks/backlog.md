@@ -9,6 +9,16 @@
 
 - [ ] **Q10 性能基准数据**：
   - A1–A3 使用的 10 MB 测试文件构成（纯 ASCII / 含 CJK / 行长分布），以及参考机型（中端机具体型号）。
+- [ ] **Q-T11-1 T-0011 是否在 M1 支持多文档**：
+  - 推荐 A：不。`EditorSession` 保持单文档，`open` 原地替换；多文档与文档句柄留到 M2 并新增 ADR。备选 B：现在就实现 `HashMap<DocumentId, Doc>`（本任务膨胀、需 ADR）。详见 `tasks/T-0011-edit-session.md`。
+- [ ] **Q-T11-2 T-0011 打开字节的传递方式**：
+  - 推荐 A：一次性 `Vec<u8>`（`open(bytes)`），10 MB 约 70 ms，简单且与 T-0012 一致。备选 B：分块流式 `open_begin`/`open_chunk`/`open_finish`（省一份拷贝，但引入 FFI 状态机）。
+- [ ] **Q-T11-3 T-0011 打开后的版本号**：
+  - 推荐 A：会话内单调递增（`TextBuffer::reset` 使版本 +1，即使内容相同），Kotlin 布局缓存继续依赖版本变化。备选 B：每次打开重置为 1，用 Kotlin 侧 `document_id` 区分缓存。
+- [ ] **Q-T11-4 T-0011 是否把 `encode(format)` 改为无参 `encode()`**：
+  - 推荐 A：保持 T-0010 的 `encode(format)` 不变，只新增 `format()` getter，由 T-0013 取格式后调用。备选 B：改为无参 `encode()`，单一数据源，但需改动 T-0010 的签名、桥接与测试。
+- [ ] **Q-T11-5 T-0011 是否现在就做超长行字节窗口**：
+  - 推荐 A：不做，复用 `viewport` 整行返回；等 Q10 / T-0025 数据，需要时在 T-0014/T-0015 新增窗口接口。备选 B：现在就加 `max_line_bytes` 与截断标记（影响光标/选区映射）。
 
 ## 已确认
 
@@ -65,14 +75,13 @@
   - 任务单 `T-0008-undo-redo.md` - Reviewed（`feat/m1-t8-undo-redo`，负责人 deepseek-v4p1-flash-1017）
   - 验收：A5 的 proptest 通过；500 ms 内连续插入合并为一步；换行断开合并。
 
-## Backlog
-
-### 缓冲区与会话
 - [ ] **T-0011 编辑会话 FFI**（依赖 T-0007、T-0008、T-0009）
-  - 任务单: `` - Backlog
-  - 范围：通过 `rcode-ffi` 暴露 open / edit / 批量取行 / 当前版本号（undo / redo 已由 T-0008 导出，本任务复用并按需重组签名）。加载/替换文档内容后必须调用 `EditorSession::clear_history()`，加载本身不得成为可撤销步骤。Kotlin 侧不缓存完整文本（architecture §3.1）。
+  - 任务单 `T-0011-edit-session.md` - 待确认（Q-T11-1..5）
+  - 范围：通过 `rcode-ffi` 暴露 open / edit / 批量取行 / 当前版本号（undo / redo 已由 T-0008 导出，本任务复用并按需重组签名）。`open` 内部调用 `clear_history()`，加载本身不得成为可撤销步骤。Kotlin 侧不缓存完整文本（architecture §3.1）。
   - 验收：Kotlin 仪器测试可完成“打开 → 插入 → 撤销 → 取行”；FFI 层不 panic（`catch_unwind` 或等价保证）。
   - 相关 skill：uniffi-bridge、rust-core
+
+## Backlog
 
 ### 文件读写
 - [ ] **T-0012 SAF 打开文件**（依赖 T-0009、T-0011、Q14）
