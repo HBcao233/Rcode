@@ -106,3 +106,29 @@ All notable changes are documented here. Format follows Keep a Changelog.
   `clearHistory`; JVM tests cover the pinyin sequence, cancelled composition and
   normal undo/redo. UI wiring of the Undo/Redo buttons remains out of scope
   (Q-T8-4, T-0028).
+
+### T-0011 (edit-session FFI: open, format, batch viewport)
+- Added `EditorSession::open(bytes)` (Rust) and the FFI record `OpenedDocument
+  { version, line_count, format, cursor }`: the session decodes the file in Rust
+  through `rcode-fs::codec::decode`, replaces the whole text, clears undo/redo,
+  resets the caret to offset 0 and stores the detected format. Decoding happens
+  before the session lock is taken, so a rejected file leaves text, format, caret,
+  version and history untouched. Opening increments the version exactly once even
+  when the bytes equal the current text, and is never an undoable step.
+- Added `EditorSession::format()` and `EditorError::{NotUtf8, UnsupportedEncoding}`
+  with `UnsupportedEncodingKind` (UTF-16/UTF-32 BOMs and `Binary { nul_offset }`),
+  an FFI mirror of the codec's detection. On the bridge these map to the sealed
+  `DocumentOpenException` (`NotUtf8(offset)`, `UnsupportedEncoding(kind)`).
+- Added `TextBuffer::reset(&str)` (buffer): whole-document replacement with a
+  single version bump, no `Edit` and no history bookkeeping.
+- Added Criterion benchmark `rcode-ffi/open` for `open` on 10 MB mixed-script and
+  10 MB ASCII documents, plus `viewport(0, 100)` after opening (V10).
+- Formalized `viewport(first_line, max_lines)` as the only bulk line API: one
+  call per screen, `first_line` clamped, `max_lines` clamped to `1..=10000`,
+  `start_byte` in UTF-8 bytes, line text without its terminator, and `version` /
+  lines / cursor from one locked snapshot.
+- Added Kotlin `OpenedDocumentState`, `DocumentOpenException`,
+  `UnsupportedEncodingKind`, and `open` / `format` on `EditorSessionApi` (real
+  bridge and JVM fake). Added instrumented tests for BOM+CRLF opening, the
+  open → insert → undo → viewport flow, history reset, rejected encodings keeping
+  the document intact, and repeated opening.

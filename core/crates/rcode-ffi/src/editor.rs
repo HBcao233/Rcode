@@ -7,6 +7,22 @@
 //!
 //! The session is the authoritative owner of text and caret. Kotlin only caches
 //! the viewport returned by [`EditorSession::viewport`] for rendering.
+//!
+//! # Lifecycle
+//!
+//! One session holds one document (M1). [`EditorSession::new`] starts an empty
+//! untitled document; [`EditorSession::open`] replaces it with the decoded bytes
+//! of a file, clearing undo history and moving the caret to offset 0. Opening is
+//! not an edit, but it does increment the version.
+//!
+//! # Batch line access
+//!
+//! [`EditorSession::viewport`] is the only way to read lines: one call returns
+//! all visible lines, their start offsets and the caret in one snapshot, so
+//! Kotlin never loops per line or per character. `first_line` is clamped to the
+//! document and `max_lines` to `1..=10000`; line text excludes the terminator;
+//! `version` identifies the snapshot the lines and caret belong to. Prefetching
+//! (T-0014) widens the requested range instead of making additional calls.
 
 use std::fmt;
 use std::sync::{Arc, Mutex, MutexGuard};

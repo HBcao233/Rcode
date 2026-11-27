@@ -7,7 +7,10 @@ detection and LF/CRLF detection.
 No UniFFI, no Android APIs, no dependency on `rcode-buffer`. Reading files
 through SAF and writing them transactionally stay in Kotlin (`platform/document`,
 T-0012/T-0010); `rcode-ffi::EditorSession::encode` is the only caller of
-`encode_into` today, and Kotlin never re-implements the codec.
+`encode_into` today, and `rcode-ffi::EditorSession::open` (T-0011) is the only
+caller of `decode`: opening a file decodes in Rust, stores the detected
+`DocumentFormat` in the session and clears undo history, so Kotlin never
+re-implements the codec and never needs the full text to detect BOM/newlines.
 
 ## Public API (`rcode_fs::codec`)
 
@@ -21,6 +24,10 @@ T-0012/T-0010); `rcode-ffi::EditorSession::encode` is the only caller of
 | `encode_into(&str, &DocumentFormat, &mut Vec<u8>)` | Same, appending to a reused buffer |
 | `LineEnding::{Lf, CrLf}` | M1 scope only |
 | `CodecError::{NotUtf8, UnsupportedEncoding}` | `NotUtf8` carries a byte offset in the original input; `UnsupportedEncoding` distinguishes UTF-16/UTF-32 BOMs from a `NUL` byte |
+
+`decode` errors map to `rcode_ffi::EditorError::{NotUtf8, UnsupportedEncoding}`
+through `EditorSession::open`, so Kotlin sees the same distinctions as a UniFFI
+sealed exception (`DocumentOpenException` on the bridge side).
 
 All offsets are **UTF-8 bytes of the original input, BOM included**. The prefix
 `bytes[..offset]` of a `NotUtf8` error is always valid UTF-8.

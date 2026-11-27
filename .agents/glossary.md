@@ -11,6 +11,9 @@
 | Buffer | 文档的文本内容及其编辑历史，由 Rust 持有 |
 | Span | 高亮区间，包含起止偏移和样式类别 |
 | Viewport | 当前屏幕可见的文本区域 |
+| 打开（open） | `EditorSession::open(bytes)`：Rust 内 `codec::decode` 解码 → `TextBuffer::reset` 整体替换 → 清空撤销历史 → 光标归零 → 记录格式。它不是编辑，不产生撤销步；失败时文档完全不变（T-0011） |
+| 文档版本（document version） | 会话内单调递增的 `u64`。编辑、undo/redo、`open` 都使其 +1；光标移动与空操作不递增。Kotlin 据此判断行布局缓存是否失效 |
+| 文档格式（会话存储） | `codec::decode` 检测出的 `DocumentFormat`（是否 BOM + 换行形式），由 `EditorSession` 持有，`format()` 供保存时传给 `encode(format)`；未打开过的文档为无 BOM + LF |
 | IME | 输入法编辑器，Android 上通过 `InputConnection` 与应用交互 |
 | Composing text | 输入法尚未确认的组合文本 |
 | 撤销组（undo group） | 撤销/重做最小单位：`start_byte` + `removed` + `inserted` + `cursor_before`；一次 undo 回放一个组 |
@@ -30,6 +33,7 @@
 | 归一化（newline normalization） | 解码时把 `\r\n` 改写为 `\n`，使缓冲区只面对一种换行；它只删除 `\r\n` 对中的 `\r`，因此单独的 `\r` 仍是内容，保存时可无损还原 |
 | 主导换行符（dominant line ending） | 文档中占比最多的换行形式，并列时取最先出现的形式；无换行时为 LF。混合换行的文件保存时统一为它（Q-T9-2） |
 | DocumentFormat | codec 输出的保存格式：是否带 BOM + 单一换行形式；新建文件为无 BOM + LF |
+| 批量取行 | 一次 FFI 调用返回整屏行（`viewport(first_line, max_lines)`），含版本号、行数、行首字节偏移、行文本与光标；禁止逐行/逐字符调用（T-0011） |
 | Macrobenchmark | Jetpack 提供的启动与滚动性能测试库 |
 | 失败原子性（failure atomicity） | 一次操作要么完全成功，要么保持操作前的状态。Rcode 的保存只对可捕获的 I/O/校验失败保证它（A7）：失败后原文件字节不变；进程被杀死导致的磁盘不一致不在保证范围（Q-T10-2） |
 | 保存事务（save transaction） | `AtomicDocumentSaver` 的保存流程：写应用私有临时文件 → 备份原文件 → 截断覆盖 → 回读校验 → 失败时用备份回滚。用 `Mutex` 串行化，事务主体在 `NonCancellable` 中执行 |

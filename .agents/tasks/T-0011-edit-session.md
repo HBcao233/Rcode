@@ -3,9 +3,9 @@
 - **ID**：T-0011
 - **里程碑**：M1（A1、A6、A7 的前置；A12 的“打开”步骤；G2、G3）
 - **类型**：feat
-- **状态**：In Progress
+- **状态**：Review（实现完成，DoD 自检通过；等待审查 agent）
 - **分支**：`feat/m1-t11-edit-session`（已创建）
-- **负责人**：deepseek-v4p1-flash-1017（2026-11-27 领取）
+- **负责人**：deepseek-v4p1-flash-1017（2026-11-27 10:55 领取）
 - **涉及模块**：buffer（`TextBuffer` 的整体装载）/ ffi（`EditorSession::open`、`format()`、codec 错误映射、批量取行契约）/ editor（`EditorSessionApi`、打开错误类型）/ bridge（`UniffiEditorSession`、`FakeEditorSession`）
 - **相关 skill**：uniffi-bridge、rust-core、testing-qa、perf-benchmark（open 基准）；不涉及 Canvas 布局与 IME 状态机，不需要 editor-rendering、kotlin-compose-ui
 
@@ -214,18 +214,18 @@ impl EditorSession {
 
 ## 验收标准
 
-- [ ] **V1** `TextBuffer::reset` 已新增并有 `///` 文档；`cargo test -p rcode-buffer` 通过；reset 后内容、行数正确，版本只 +1，连续 reset 单调递增，1 MB 文本不 panic。
-- [ ] **V2** `EditorSession::open`、`format()`、`OpenedDocument`、`UnsupportedEncodingKind` 与两个新 `EditorError` 变体已导出；UniFFI 绑定由 `scripts/build-core.sh` 重新生成且未手改；`cargo doc -p rcode-ffi --no-deps` 无警告；除新增项外现有 FFI 签名不变（`encode(format)` 按 Q-T11-4 的结论）。
-- [ ] **V3** Rust 单元测试证明：新建会话的 `format()` 为 `new_file()`；LF/CRLF/BOM/空文件/无结尾换行的 `open` 行数与行文本正确；`format()` 等于解码结果；光标为 0；`open` 后 `can_undo()`/`can_redo()` 为 false、`undo()` 返回 `None`；`version()` 等于 `OpenedDocument.version`；相同字节重复 `open` 仍递增版本。
-- [ ] **V4** 打开失败保持状态原子性：非法 UTF-8、UTF-16LE/BE、UTF-32LE/BE、含 NUL 的输入分别返回可区分的 `EditorError`；`NotUtf8.offset` 指向原始输入中第一个非法字节；失败后文本、格式、光标、版本、历史与打开前完全一致。
-- [ ] **V5（A6 的打开路径）** T-0009 的 12 组 fixture 中换行统一的部分，经 `open(bytes) → encode(format())` 后字节完全一致；混合换行按 Q-T9-2 不在往返清单内。
-- [ ] **V6** `viewport` 作为批量取行协议写入模块文档与 `EditorSessionApi` KDoc：一次调用、`first_line` 夹到文档范围、`max_lines` 夹到 1..=10,000、`start_byte` 为缓冲区字节、行文本不含终止符、`version` 与行同快照；现有 viewport 测试全部通过；未新增逐行接口。
-- [ ] **V7** Kotlin `EditorSessionApi`/`UniffiEditorSession`/`FakeEditorSession` 已更新，新增 `OpenedDocumentState` 与 `DocumentOpenException` 映射；`./gradlew :app:testDebugUnitTest` 通过；生产代码除 `UniffiEditorSession` 外没有使用 `text()` 读取全文（`rg "\.text\(\)" app/src/main` 可核对）。
-- [ ] **V8** 仪器测试覆盖 §C 的 5 组用例并通过 `compileDebugAndroidTestKotlin`；有设备时 `:app:connectedDebugAndroidTest` 通过，无设备时在交接记录注明“未运行”及原因（同 T-0007/T-0008/T-0010）。
-- [ ] **V9** 不 panic：库代码无 `unwrap`/`expect`/`panic!`；`cargo clippy --workspace --all-targets -- -D warnings` 通过；错误路径由 V4 覆盖；交接记录说明 UniFFI 边界对 panic 的处理（`InternalException("Rust panic")`），而非声称“绝不会 panic”。
-- [ ] **V10** `cargo bench -p rcode-ffi --bench open` 已运行并记录：10 MB CJK/emoji 与 10 MB ASCII 的 `open`、open 后 `viewport(0, 100)` 中位数，写入交接记录并注明设备；不做硬门槛，但与 T-0009/T-0007 的 45.4 ms + 23.9 ms 对照，异常时说明原因。
-- [ ] **V11** DoD（conventions §7）本机可完成部分：`cargo fmt --all -- --check`、clippy、`cargo test --workspace`、`cargo doc`、`ktlintCheck`、`lintDebug`、`testDebugUnitTest`、`assembleDebug`、`compileDebugAndroidTestKotlin`；文档（architecture、两个 crate README、glossary、CHANGELOG、backlog、任务单）已更新。本任务不涉及 UI，不需要截图。
-- [ ] **V12** `git diff` 只包含任务列出的文件；未新增外部依赖、未改 Manifest/权限/包名/签名、未接 UI、未新增 ADR（除非 Q-T11-1 选择多文档）。
+- [x] **V1** `TextBuffer::reset` 已新增并有 `///` 文档；`cargo test -p rcode-buffer` 通过；reset 后内容、行数正确，版本只 +1，连续 reset 单调递增，1 MB 文本不 panic。
+- [x] **V2** `EditorSession::open`、`format()`、`OpenedDocument`、`UnsupportedEncodingKind` 与两个新 `EditorError` 变体已导出；UniFFI 绑定由 `scripts/build-core.sh` 重新生成且未手改；`cargo doc -p rcode-ffi --no-deps` 无警告；除新增项外现有 FFI 签名不变（`encode(format)` 按 Q-T11-4 的结论）。
+- [x] **V3** Rust 单元测试证明：新建会话的 `format()` 为 `new_file()`；LF/CRLF/BOM/空文件/无结尾换行的 `open` 行数与行文本正确；`format()` 等于解码结果；光标为 0；`open` 后 `can_undo()`/`can_redo()` 为 false、`undo()` 返回 `None`；`version()` 等于 `OpenedDocument.version`；相同字节重复 `open` 仍递增版本。
+- [x] **V4** 打开失败保持状态原子性：非法 UTF-8、UTF-16LE/BE、UTF-32LE/BE、含 NUL 的输入分别返回可区分的 `EditorError`；`NotUtf8.offset` 指向原始输入中第一个非法字节；失败后文本、格式、光标、版本、历史与打开前完全一致。
+- [x] **V5（A6 的打开路径）** T-0009 的 12 组 fixture 中换行统一的部分，经 `open(bytes) → encode(format())` 后字节完全一致；混合换行按 Q-T9-2 不在往返清单内。
+- [x] **V6** `viewport` 作为批量取行协议写入模块文档与 `EditorSessionApi` KDoc：一次调用、`first_line` 夹到文档范围、`max_lines` 夹到 1..=10,000、`start_byte` 为缓冲区字节、行文本不含终止符、`version` 与行同快照；现有 viewport 测试全部通过；未新增逐行接口。
+- [x] **V7** Kotlin `EditorSessionApi`/`UniffiEditorSession`/`FakeEditorSession` 已更新，新增 `OpenedDocumentState` 与 `DocumentOpenException` 映射；`./gradlew :app:testDebugUnitTest` 通过；生产代码除 `UniffiEditorSession` 外没有使用 `text()` 读取全文（`rg "\.text\(\)" app/src/main` 可核对）。
+- [x] **V8** 仪器测试覆盖 §C 的 5 组用例并通过 `compileDebugAndroidTestKotlin`；有设备时 `:app:connectedDebugAndroidTest` 通过，无设备时在交接记录注明“未运行”及原因（同 T-0007/T-0008/T-0010）。
+- [x] **V9** 不 panic：库代码无 `unwrap`/`expect`/`panic!`；`cargo clippy --workspace --all-targets -- -D warnings` 通过；错误路径由 V4 覆盖；交接记录说明 UniFFI 边界对 panic 的处理（`InternalException("Rust panic")`），而非声称“绝不会 panic”。
+- [x] **V10** `cargo bench -p rcode-ffi --bench open` 已运行并记录：10 MB CJK/emoji 与 10 MB ASCII 的 `open`、open 后 `viewport(0, 100)` 中位数，写入交接记录并注明设备；不做硬门槛，但与 T-0009/T-0007 的 45.4 ms + 23.9 ms 对照，异常时说明原因。
+- [x] **V11** DoD（conventions §7）本机可完成部分：`cargo fmt --all -- --check`、clippy、`cargo test --workspace`、`cargo doc`、`ktlintCheck`、`lintDebug`、`testDebugUnitTest`、`assembleDebug`、`compileDebugAndroidTestKotlin`；文档（architecture、两个 crate README、glossary、CHANGELOG、backlog、任务单）已更新。本任务不涉及 UI，不需要截图。
+- [x] **V12** `git diff` 只包含任务列出的文件；未新增外部依赖、未改 Manifest/权限/包名/签名、未接 UI、未新增 ADR（除非 Q-T11-1 选择多文档）。
 
 ## 计划
 
@@ -283,10 +283,34 @@ bash ./scripts/build-core.sh              # 重新生成 Kotlin 绑定，检查 
 
 ## 交接记录
 
-- 日期：
-- 分支与提交：
+- 日期：2026-11-27
+- 分支与提交：`feat/m1-t11-edit-session`；`44c08ab feat(buffer): add whole-document reset with a version bump`、`d9f4607 feat(ffi): open a document with codec decoding and stored format`（Kotlin、文档与任务单在随后的提交中）。
 - 已完成：
-- 未完成：
-- 测试结果：
-- 基准：
+  - Rust：`TextBuffer::reset`（V1）；`EditorSession::open`/`format`、`OpenedDocument`、`UnsupportedEncodingKind`、`EditorError::{NotUtf8, UnsupportedEncoding}` 与 `From<CodecError>`（V2–V5）；`Doc.format` 存储解码格式，`new()` 为 `DocumentFormat::new_file()`；打开失败原子性由“锁外解码”保证。
+  - 基准：`core/crates/rcode-ffi/benches/open.rs` + `[[bench]] name = "open"`（V10）。
+  - Kotlin：`editor/OpenedDocumentState.kt`、`editor/DocumentOpenException.kt`（含 `UnsupportedEncodingKind`）、`EditorSessionApi.open/format` 与批量取行 KDoc、`UniffiEditorSession` 映射与异常转换、`FakeEditorSession`（V6、V7）。
+  - 仪器测试：`EditorSessionInstrumentedTest` 新增 5 组打开用例（V8 的代码部分）。
+  - 文档：`architecture.md` §3.2/§3.3、`core/crates/rcode-fs/README.md`、`core/crates/rcode-buffer/README.md`、`glossary.md`、`CHANGELOG.md`、`tasks/backlog.md`（T-0011 状态）、本任务单。
+- 未完成 / 需人类确认：
+  - **真机仪器测试未运行**：本会话 `adb devices` 为空（无真机/模拟器），仅验证 `:app:compileDebugAndroidTestKotlin` 通过。需要在有设备时运行 `./gradlew :app:connectedDebugAndroidTest`，重点看 `openDecodesBomAndCrlfAndStoresTheFormat`、`openThenEditUndoAndViewport`、`openDiscardsTheHistoryOfThePreviousDocument`、`failedOpenKeepsTheDocumentAndIsReported`、`repeatedOpenBumpsTheVersionAndEmptyFileHasOneLine`。
+  - **并发文档修改**：工作期间 `.agents/tasks/backlog.md` 被外部会话改写（删掉“待确认”区、Q10 标为已确认、Q-T11-1..5 条目被删除）。登记时未回退该修改；Q-T11-1..5 的结论仍完整记录在本任务单“已确认”区。T-0011 在 backlog 的状态行保留了本任务的负责人与分支。
+- 测试结果（实际命令与结果）：
+  - `cd core && cargo fmt --all -- --check`：通过。
+  - `cd core && cargo clippy --workspace --all-targets -- -D warnings`：通过（0 警告）。
+  - `cd core && cargo test --workspace`：全部通过（rcode-buffer 33 + prop 1 + prop 3 + prop 1；rcode-ffi 36；rcode-fs 23 + prop 3）。
+  - `cd core && cargo doc -p rcode-ffi --no-deps`：通过，无警告。
+  - `bash ./scripts/build-core.sh`：通过（arm64-v8a `.so` + Kotlin 绑定重新生成，未手改；`Cargo.lock` 无变化）。
+  - `./gradlew :app:ktlintCheck :app:lintDebug :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug --offline`：BUILD SUCCESSFUL。
+  - `rg "\\.text\\(\\)" app/src/main`：仅 `bridge/UniffiEditorSession.kt` 的转发实现（V7 要求）。
+  - `./gradlew :app:connectedDebugAndroidTest`：**未运行**（`adb devices` 为空）。
+- 基准（V10，`cargo bench -p rcode-ffi --bench open`，release，Termux 主机 `GAR-AN60`，aarch64，8 核）：
+  - `open` 10 MB 混合脚本（70% ASCII / 25% CJK / 5% emoji，LF）：**[76.007 ms 76.640 ms 77.907 ms]**（中位数 76.6 ms）。
+  - `open` 10 MB 纯 ASCII（LF）：**[38.221 ms 38.336 ms 38.443 ms]**（中位数 38.3 ms）。
+  - open 后 `viewport(0, 100)`（10 MB 混合脚本）：**[129.22 µs 129.40 µs 129.62 µs]**。
+  - 对照 T-0009 `decode` 45.4 ms + T-0007 `TextBuffer::from_str` 23.9 ms ≈ 69 ms：混合脚本的 76.6 ms 是“decode + rope 构建 + FFI 入参 10 MB 拷贝（`Vec<u8>` 所有权转移）”，符合预期；ASCII 38.3 ms 同理。未做硬门槛，T-0025 用 Macrobenchmark 测总时延。
+- panic 边界说明（V9）：库代码无 `unwrap`/`expect`/`panic!`（测试中的 `panic!` 带 `#[allow(clippy::panic)]`）；预期失败全部走 `Result`/`EditorError`。UniFFI 0.32 生成的 `rust_call`/`uniffiRustCall` 在边界捕获 panic 并映射为 Kotlin `InternalException("Rust panic")`，因此“panic 不穿出 FFI、进程不 abort”由工具链保证；本任务未逐函数包 `catch_unwind`（与任务单 §7 的推荐一致）。
 - 下一步建议：
+  1. 审查重点：`open` 的“锁外解码 + 锁内 reset/clear/光标/格式”顺序与失败原子性；`DocumentOpenException` 的 Kotlin 类层次是否便于 T-0012 生成文案；`viewport` KDoc 是否覆盖 T-0014 的预取用法。
+  2. 在有设备的环境运行 `:app:connectedDebugAndroidTest`，确认 5 组新用例。
+  3. T-0012 接 SAF 后：先 `finishComposingText()`，再在 `Dispatchers.IO` 上 `session.open(bytes)`，成功用 `OpenedDocumentState` 刷新 UI，失败按 `DocumentOpenException` 映射 `strings.xml`；T-0013 保存时用 `session.format()` 调 `encode(format)`。
+
