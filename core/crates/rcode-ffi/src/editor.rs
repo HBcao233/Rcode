@@ -9,8 +9,9 @@
 //! the viewport returned by [`EditorSession::viewport`] for rendering.
 
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::Instant;
 
-use rcode_buffer::{BufferError, TextBuffer};
+use rcode_buffer::{BufferError, History, TextBuffer};
 use rcode_fs::codec;
 
 /// Upper bound for one viewport request, so a bad caller cannot allocate without limit.
@@ -203,6 +204,8 @@ fn to_u32(value: usize) -> u32 {
 struct Doc {
     /// Authoritative text; owns the version number.
     buffer: TextBuffer,
+    /// Undo/redo groups for [`Self::buffer`], stored under the same lock.
+    history: History,
     /// Caret as a UTF-8 byte offset; always on a character boundary.
     cursor: usize,
 }
@@ -211,8 +214,15 @@ impl Doc {
     fn new() -> Self {
         Self {
             buffer: TextBuffer::new(),
+            history: History::default(),
             cursor: 0,
         }
+    }
+
+    /// Records a successful edit; `caret_before` is the caret before the edit.
+    fn record(&mut self, edit: &rcode_buffer::Edit, inserted: &str, caret_before: usize) {
+        self.history
+            .record(edit, inserted, caret_before, Instant::now());
     }
 
     fn cursor_info(&self) -> EditorCursor {
@@ -291,10 +301,12 @@ impl EditorSession {
     pub fn insert_text(&self, text: String) -> u64 {
         let mut doc = self.lock();
         let at = doc.cursor;
+        let caret_before = doc.cursor;
         // `at` is always a valid character boundary, so this cannot fail.
         let Ok(edit) = doc.buffer.insert(at, &text) else {
             return doc.buffer.version();
         };
+        doc.record(&edit, &text, caret_before);
         doc.cursor = edit.new_end_byte;
         edit.version
     }
@@ -311,7 +323,9 @@ impl EditorSession {
     ) -> Result<u64, EditorError> {
         let mut doc = self.lock();
         let (start, end) = (start_byte as usize, end_byte as usize);
+        let caret_before = doc.cursor;
         let edit = doc.buffer.replace(start..end, &text)?;
+        doc.record(&edit, &text, caret_before);
         doc.cursor = edit.new_end_byte;
         Ok(edit.version)
     }
@@ -327,11 +341,13 @@ impl EditorSession {
     pub fn delete_backward(&self) -> u64 {
         let mut doc = self.lock();
         let cursor = doc.cursor;
+        let caret_before = cursor;
         let Some(previous) = doc.buffer.prev_char_boundary(cursor) else {
             return doc.buffer.version();
         };
         match doc.buffer.delete(previous..cursor) {
             Ok(edit) => {
+                doc.record(&edit, "", caret_before);
                 doc.cursor = previous;
                 edit.version
             }
@@ -345,14 +361,112 @@ impl EditorSession {
     pub fn delete_forward(&self) -> u64 {
         let mut doc = self.lock();
         let cursor = doc.cursor;
+        let caret_before = cursor;
         let Some(next) = doc.buffer.next_char_boundary(cursor) else {
             return doc.buffer.version();
         };
         match doc.buffer.delete(cursor..next) {
-            Ok(edit) => edit.version,
+            Ok(edit) => {
+                doc.record(&edit, "", caret_before);
+                edit.version
+            }
             // Both offsets are character boundaries, so this cannot fail.
             Err(_) => doc.buffer.version(),
         }
+    }
+
+    /// Undoes the newest undo group.
+    ///
+    /// Returns the new document version, or `None` when there was nothing to undo
+    /// (the version and caret are unchanged then). On success the caret is restored
+    /// to the offset recorded before the group's first edit.
+    ///
+    /// An unfinished IME composition is closed first, so a committed word is undone
+    /// as a whole.
+    pub fn undo(&self) -> Option<u64> {
+        let mut doc = self.lock();
+        doc.history.end_composition();
+        let Doc {
+            buffer,
+            history,
+            cursor,
+        } = &mut *doc;
+        let result = history.undo(|group| {
+            buffer
+                .replace(group.undo_range(), &group.removed)
+                .map(|_| ())
+        });
+        match result {
+            Ok(Some(new_cursor)) => {
+                *cursor = new_cursor;
+                Some(buffer.version())
+            }
+            // Nothing to undo, or a group that no longer fits the buffer (the
+            // latter is unreachable for groups produced by this session).
+            Ok(None) | Err(_) => None,
+        }
+    }
+
+    /// Redoes the newest redo group.
+    ///
+    /// Returns the new document version, or `None` when there was nothing to redo.
+    /// On success the caret is placed just past the redone text.
+    pub fn redo(&self) -> Option<u64> {
+        let mut doc = self.lock();
+        doc.history.end_composition();
+        let Doc {
+            buffer,
+            history,
+            cursor,
+        } = &mut *doc;
+        let result = history.redo(|group| {
+            buffer
+                .replace(group.redo_range(), &group.inserted)
+                .map(|_| ())
+        });
+        match result {
+            Ok(Some(new_cursor)) => {
+                *cursor = new_cursor;
+                Some(buffer.version())
+            }
+            Ok(None) | Err(_) => None,
+        }
+    }
+
+    /// `true` when [`Self::undo`] would change the document.
+    pub fn can_undo(&self) -> bool {
+        self.lock().history.can_undo()
+    }
+
+    /// `true` when [`Self::redo`] would change the document.
+    pub fn can_redo(&self) -> bool {
+        self.lock().history.can_redo()
+    }
+
+    /// Clears the undo and redo history (both stacks and the open group).
+    ///
+    /// Call this after loading or replacing a document's text (T-0011/T-0012):
+    /// opening a file must not be an undoable step.
+    pub fn clear_history(&self) {
+        self.lock().history.clear();
+    }
+
+    /// Marks the following edits as one IME composition.
+    ///
+    /// Closes the current group; idempotent while already composing. The next
+    /// edits are merged into one group regardless of the 500 ms merge window, so a
+    /// slow pinyin sequence undoes as one step.
+    pub fn begin_composition(&self) {
+        self.lock().history.begin_composition();
+    }
+
+    /// Ends an IME composition, closing its group.
+    ///
+    /// A composition that left the text unchanged (cancelled input, or a commit
+    /// that rewrote identical text) leaves no undo step. Idempotent when not
+    /// composing.
+    pub fn end_composition(&self) {
+        self.lock().history.end_composition();
     }
 
     /// Moves the caret to `byte_offset`, clamped to the document and snapped down to
@@ -764,6 +878,130 @@ mod tests {
             codec::LineEnding::CrLf
         );
         assert_eq!(LineEnding::from(codec::LineEnding::Lf), LineEnding::Lf);
+    }
+
+    #[test]
+    fn undo_and_redo_restore_text_and_caret() {
+        let session = EditorSession::new();
+        assert_eq!(session.undo(), None);
+        assert_eq!(session.redo(), None);
+        assert!(!session.can_undo());
+        assert!(!session.can_redo());
+        let version = session.version();
+        assert_eq!(session.undo(), None);
+        assert_eq!(session.version(), version);
+
+        session.insert_text("ab".to_string());
+        session.end_composition();
+        session.move_cursor(0);
+        let inserted_version = session.insert_text("X".to_string());
+        assert_eq!(session.text(), "Xab");
+        session.move_cursor(2);
+
+        let undo_version = session.undo();
+        assert!(undo_version.is_some_and(|version| version > inserted_version));
+        assert_eq!(session.text(), "ab");
+        // The group recorded the caret before its edit (offset 0).
+        assert_eq!(session.cursor().byte_offset, 0);
+        assert!(session.can_redo());
+        assert!(session.can_undo());
+
+        let redo_version = session.redo();
+        assert!(redo_version.is_some_and(|version| version > inserted_version));
+        assert_eq!(session.text(), "Xab");
+        // Redo puts the caret just past the redone text.
+        assert_eq!(session.cursor().byte_offset, 1);
+        assert!(!session.can_redo());
+
+        // Version is unchanged when there is nothing to undo.
+        let version = session.version();
+        session.move_cursor(0);
+        session.insert_text("Q".to_string());
+        session.undo();
+        session.redo();
+        assert_eq!(session.text(), "QXab");
+        assert!(session.version() > version);
+    }
+
+    #[test]
+    fn undo_then_new_edit_clears_redo() {
+        let session = EditorSession::new();
+        session.insert_text("a".to_string());
+        session.end_composition();
+        session.insert_text("b".to_string());
+        session.end_composition();
+        assert!(session.undo().is_some());
+        assert_eq!(session.text(), "a");
+        assert!(session.can_redo());
+
+        session.insert_text("c".to_string());
+        assert_eq!(session.text(), "ac");
+        assert!(!session.can_redo());
+        assert!(session.undo().is_some());
+        assert_eq!(session.text(), "a");
+    }
+
+    #[test]
+    fn a_composition_sequence_undoes_as_one_word() {
+        let session = EditorSession::new();
+        session.begin_composition();
+        session.begin_composition();
+        let _ = session.replace_range(0, 0, "n".to_string());
+        let _ = session.replace_range(1, 1, "i".to_string());
+        let _ = session.replace_range(2, 2, "h".to_string());
+        let _ = session.replace_range(3, 3, "a".to_string());
+        let _ = session.replace_range(4, 4, "o".to_string());
+        // Commit: replace the whole composing span with the chosen word.
+        let _ = session.replace_range(0, 5, "你好".to_string());
+        session.end_composition();
+        assert_eq!(session.text(), "你好");
+        assert_eq!(session.cursor().byte_offset, "你好".len() as u32);
+
+        let version = session.undo();
+        assert!(version.is_some());
+        assert_eq!(session.text(), "");
+        assert_eq!(session.cursor().byte_offset, 0);
+        assert!(!session.can_undo());
+    }
+
+    #[test]
+    fn cancelled_composition_leaves_no_undo_step() {
+        let session = EditorSession::new();
+        session.begin_composition();
+        let _ = session.replace_range(0, 0, "ni".to_string());
+        let _ = session.replace_range(0, 2, String::new());
+        session.end_composition();
+        assert_eq!(session.text(), "");
+        assert!(!session.can_undo());
+        assert_eq!(session.undo(), None);
+    }
+
+    #[test]
+    fn clear_history_makes_the_current_text_the_base() {
+        let session = EditorSession::new();
+        session.insert_text("abc".to_string());
+        let version = session.version();
+        session.clear_history();
+        assert!(!session.can_undo());
+        assert!(!session.can_redo());
+        assert_eq!(session.undo(), None);
+        assert_eq!(session.version(), version);
+        assert_eq!(session.text(), "abc");
+    }
+
+    #[test]
+    fn undo_and_redo_a_megabyte_group() {
+        let session = EditorSession::new();
+        let text = "a".repeat(1024 * 1024);
+        session.insert_text(text.clone());
+        session.end_composition();
+        assert_eq!(session.text().len(), text.len());
+        assert!(session.undo().is_some());
+        assert_eq!(session.text(), "");
+        assert_eq!(session.cursor().byte_offset, 0);
+        assert!(session.redo().is_some());
+        assert_eq!(session.text(), text);
+        assert_eq!(session.cursor().byte_offset, text.len() as u32);
     }
 
     /// A6: every T-0009 fixture round-trips through
