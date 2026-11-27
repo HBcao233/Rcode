@@ -75,3 +75,6 @@ All notable changes are documented here. Format follows Keep a Changelog.
   for FFI encoding and A7 through `ContentResolverDocument`.
 - Fixed: an unused `kotlin.math.roundToInt` import in `EditorView` that had left
   `ktlintCheck` red (pre-existing on `main`, not introduced by this task).
+
+### Added
+- Added bottom action bar ui.
