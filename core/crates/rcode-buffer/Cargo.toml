@@ -18,5 +18,9 @@ proptest = { workspace = true }
 name = "buffer"
 harness = false
 
+[[bench]]
+name = "history"
+harness = false
+
 [lints]
 workspace = true

@@ -30,6 +30,11 @@
 //! [`TextBuffer::lines`] and the UTF-16 context helpers are `O(log n + output)`.
 //! Only [`Display`](std::fmt::Display) (full text) is `O(n)`.
 //!
+//! # Undo history
+//!
+//! [`History`] stores undo groups next to the text; the module documentation of
+//! [`history`] defines grouping, the 64 MiB limit and the replay contract.
+//!
 //! # Panics
 //!
 //! No public method panics for any input: every index is validated before it
@@ -39,6 +44,9 @@ use std::fmt;
 use std::ops::Range;
 
 use ropey::Rope;
+
+pub mod history;
+pub use history::{History, MERGE_GROUP_BYTE_LIMIT, MERGE_WINDOW, UNDO_BYTE_LIMIT, UndoGroup};
 
 /// Errors returned by [`TextBuffer`].
 ///

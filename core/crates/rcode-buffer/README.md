@@ -23,6 +23,12 @@ Built on [`ropey`](https://docs.rs/ropey) 1.6 with default features disabled, so
 | `line_content_range` / `line_text` / `lines(first, max)` | Line queries for the viewport |
 | `slice_to_string(range)` | Byte-range substring |
 | `utf16_context_before` / `utf16_context_after` | IME `getTextBefore/AfterCursor`, never splitting a surrogate pair |
+| `History::new(byte_limit)` / `clear()` | Undo history with a text-byte limit; reset after loading a document |
+| `History::record(&edit, inserted, cursor_before, now)` | Record a successful edit; merges into the open group when allowed |
+| `History::begin_composition()` / `end_composition()` | IME composition group boundaries |
+| `History::undo(apply)` / `redo(apply)` | Replay the newest group through a closure; `None` when empty |
+| `History::can_undo()` / `can_redo()` / `byte_len()` | Queries used by the session and tests |
+| `UndoGroup` | One undo step: `start_byte`, `removed`, `inserted`, `cursor_before`, `bytes` |
 
 ## Units
 
@@ -35,6 +41,34 @@ Built on [`ropey`](https://docs.rs/ropey) 1.6 with default features disabled, so
 
 Line content excludes the terminating `\n` and a `\r` directly before it (CRLF
 files render like LF files). A lone `\r` is an ordinary character.
+
+## Undo history (`history`)
+
+`History` stores undo groups next to the text; `rcode-ffi::EditorSession` holds one
+under the same lock as its buffer (architecture §3.3).
+
+- A group replaces `start_byte..start_byte + inserted.len()` with `removed` when
+  undone, and `start_byte..start_byte + removed.len()` with `inserted` when
+  redone. Undo restores `cursor_before`; redo places the caret at
+  `start_byte + inserted.len()`.
+- Consecutive edits merge into the open group when they are the same kind
+  (insert / delete), arrive within **500 ms**, the caret did not jump, no text in
+  the group contains `\n`, and the merged group is at most **64 KiB**. Replacing
+  a range never merges. One paste may exceed 64 KiB: that limit only governs
+  merging.
+- IME composition is grouped explicitly: `begin_composition` starts a group that
+  ignores the 500 ms window, so a slow pinyin sequence still undoes as one step.
+  `end_composition` closes it; a group whose `removed` equals its `inserted`
+  (cancelled composition, identical rewrite) is discarded.
+- Any real edit clears the redo stack. No-op edits (`Edit::changed == false`)
+  record nothing and do not clear redo.
+- The total text bytes of all undo + redo groups are capped (64 MiB by default).
+  Recording past the cap drops the oldest undo groups but always keeps the newest
+  one; string headers are not counted. Truncation is intentional, so "undo
+  everything restores the initial text" only holds while the history was not
+  truncated.
+- `undo`/`redo` run the caller's replay closure before touching the stacks: a
+  failed replacement leaves both text and history unchanged.
 
 ## Versions and no-ops
 
@@ -63,7 +97,7 @@ the UTF-16 context helpers are `O(log n + output)`. `Display` (full text) is
 
 ```bash
 cd core
-cargo test -p rcode-buffer        # unit tests + 1000-case proptest
+cargo test -p rcode-buffer        # unit tests + 1000-case proptests (buffer/undo/history)
 cargo bench -p rcode-buffer       # 10 MB synthetic document
 ```
 

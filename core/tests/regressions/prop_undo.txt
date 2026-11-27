@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 998702efe4d0d0ce63924da4126a48906b14d298b0e95010fa1b3c3c03cde6f1 # shrinks to initial = [], ops = [Replace { start: RawPos { permille: 0, delta: 0, snap: false }, end: RawPos { permille: 0, delta: 0, snap: false }, text: "a" }, Undo]

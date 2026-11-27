@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 88de9dc9ccd4a9572e82ea06370d62ae3c9824ca0efeebd202718629196ba821 # shrinks to initial = ["a"], ops = [Edit { start: RawPos { permille: 0, delta: 0, snap: false }, end: RawPos { permille: 0, delta: 1, snap: false }, text: "中" }, Edit { start: RawPos { permille: 0, delta: 3, snap: false }, end: RawPos { permille: 0, delta: 3, snap: false }, text: "中" }, Edit { start: RawPos { permille: 0, delta: 0, snap: false }, end: RawPos { permille: 0, delta: 0, snap: false }, text: "aa" }, Edit { start: RawPos { permille: 0, delta: 0, snap: false }, end: RawPos { permille: 0, delta: 0, snap: false }, text: "e\u{301}" }, Edit { start: RawPos { permille: 0, delta: 0, snap: false }, end: RawPos { permille: 0, delta: 8, snap: false }, text: "" }, Edit { start: RawPos { permille: 0, delta: 3, snap: false }, end: RawPos { permille: 0, delta: 0, snap: false }, text: "" }, Edit { start: RawPos { permille: 0, delta: 0, snap: false }, end: RawPos { permille: 0, delta: 0, snap: false }, text: "🙂" }], limit = 0
