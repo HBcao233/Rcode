@@ -136,6 +136,11 @@ class EditorView(
     }
 
     private fun performEditorKey(keyCode: Int): Boolean {
+        if (isArrowKey(keyCode) && inputHandler.isComposing) {
+            // Moving away from the composing span ends the IME composition, so the
+            // next input starts a new undo group.
+            inputHandler.finishComposingText()
+        }
         val handled =
             when (keyCode) {
                 KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
@@ -179,6 +184,17 @@ class EditorView(
         return handled
     }
 
+    private fun isArrowKey(keyCode: Int): Boolean =
+        when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_LEFT,
+            KeyEvent.KEYCODE_DPAD_RIGHT,
+            KeyEvent.KEYCODE_DPAD_UP,
+            KeyEvent.KEYCODE_DPAD_DOWN,
+            -> true
+
+            else -> false
+        }
+
     private fun isEditorKey(keyCode: Int): Boolean =
         when (keyCode) {
             KeyEvent.KEYCODE_ENTER,
@@ -208,6 +224,10 @@ class EditorView(
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
             if (!isFocused) {
                 requestFocus()
+            }
+            if (inputHandler.isComposing) {
+                inputHandler.finishComposingText()
+                refreshViewport()
             }
             showKeyboard()
         } else if (event.actionMasked == MotionEvent.ACTION_UP) {

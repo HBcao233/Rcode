@@ -2,6 +2,8 @@ package com.hbcao.rcode.editor
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -175,5 +177,94 @@ class EditorInputHandlerTest {
         handler.commitText("X", 1)
 
         assertEquals("Xab", session.text())
+    }
+
+    @Test
+    fun `a pinyin sequence committed as CJK is one undo step`() {
+        val session = FakeEditorSession()
+        val handler = EditorInputHandler(session)
+
+        handler.setComposingText("n", 1)
+        handler.setComposingText("ni", 1)
+        handler.setComposingText("nihao", 1)
+        handler.commitText("你好", 1)
+
+        assertEquals("你好", session.text())
+        assertFalse(handler.isComposing)
+        assertTrue(session.canUndo())
+
+        assertNotNull(session.undo())
+        assertEquals("", session.text())
+        assertEquals(0, session.cursorUtf16Offset())
+        assertFalse(session.canUndo())
+    }
+
+    @Test
+    fun `cancelled composition leaves no undo step`() {
+        val session = FakeEditorSession()
+        val handler = EditorInputHandler(session)
+
+        handler.setComposingText("ni", 1)
+        handler.setComposingText("", 1)
+        handler.finishComposingText()
+
+        assertEquals("", session.text())
+        assertFalse(handler.isComposing)
+        assertFalse(session.canUndo())
+        assertNull(session.undo())
+    }
+
+    @Test
+    fun `deleting the composing span cancels it without an undo step`() {
+        val session = FakeEditorSession()
+        val handler = EditorInputHandler(session)
+
+        handler.setComposingText("ni", 1)
+        handler.deleteSurroundingText(2, 0)
+
+        assertEquals("", session.text())
+        assertFalse(handler.isComposing)
+        assertFalse(session.canUndo())
+    }
+
+    @Test
+    fun `normal input undo and redo restore text cursor and version`() {
+        val session = FakeEditorSession()
+        val handler = EditorInputHandler(session)
+
+        handler.commitText("ab", 1)
+        handler.commitText("c", 1)
+        assertEquals("abc", session.text())
+        assertEquals(3, session.cursorUtf16Offset())
+        val afterEdits = session.version()
+
+        val undoVersion = session.undo()
+        assertNotNull(undoVersion)
+        assertEquals("ab", session.text())
+        assertEquals(2, session.cursorUtf16Offset())
+        assertTrue(undoVersion!! > afterEdits)
+        assertTrue(session.canRedo())
+
+        val redoVersion = session.redo()
+        assertNotNull(redoVersion)
+        assertEquals("abc", session.text())
+        assertEquals(3, session.cursorUtf16Offset())
+        assertTrue(redoVersion!! > undoVersion)
+        assertFalse(session.canRedo())
+    }
+
+    @Test
+    fun `finishComposingText keeps the composed text as one undo step`() {
+        val session = FakeEditorSession()
+        val handler = EditorInputHandler(session)
+
+        handler.setComposingText("ni", 1)
+        handler.finishComposingText()
+
+        assertEquals("ni", session.text())
+        assertFalse(handler.isComposing)
+        assertTrue(session.canUndo())
+        assertNotNull(session.undo())
+        assertEquals("", session.text())
     }
 }

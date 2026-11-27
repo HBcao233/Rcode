@@ -15,6 +15,17 @@ class FakeEditorSession(
     private var caret: Int = initialText.length
     private var documentVersion: Long = 1
 
+    private data class Snapshot(
+        val text: String,
+        val caret: Int,
+    )
+
+    private val undoStack = ArrayDeque<Snapshot>()
+    private val redoStack = ArrayDeque<Snapshot>()
+
+    private var composing: Boolean = false
+    private var compositionStart: Snapshot? = null
+
     override fun text(): String = document
 
     // Test fake: mirrors the Rust codec closely enough for the IME tests. Production
@@ -46,9 +57,13 @@ class FakeEditorSession(
     override fun cursorUtf16Offset(): Int = caret
 
     override fun insertText(text: String): Long {
+        if (text.isEmpty()) return documentVersion
+        val before = Snapshot(document, caret)
+        recordEditStart()
         document = document.substring(0, caret) + text + document.substring(caret)
         caret += text.length
         documentVersion += 1
+        recordEditEnd(before)
         return documentVersion
     }
 
@@ -59,9 +74,15 @@ class FakeEditorSession(
     ): Long {
         val startIndex = Utf8Offsets.byteToUtf16Index(document, startByte)
         val endIndex = Utf8Offsets.byteToUtf16Index(document, endByte)
-        document = document.substring(0, startIndex) + text + document.substring(endIndex)
+        if (startIndex == endIndex && text.isEmpty()) return documentVersion
+        val before = Snapshot(document, caret)
+        recordEditStart()
+        val next = document.substring(0, startIndex) + text + document.substring(endIndex)
+        val changed = next != document
+        document = next
         caret = startIndex + text.length
         documentVersion += 1
+        recordEditEnd(before, changed)
         return documentVersion
     }
 
@@ -72,19 +93,93 @@ class FakeEditorSession(
 
     override fun deleteBackward(): Long {
         if (caret == 0) return documentVersion
+        val before = Snapshot(document, caret)
+        recordEditStart()
         val previous = document.offsetByCodePoints(caret, -1)
         document = document.substring(0, previous) + document.substring(caret)
         caret = previous
         documentVersion += 1
+        recordEditEnd(before)
         return documentVersion
     }
 
     override fun deleteForward(): Long {
         if (caret >= document.length) return documentVersion
+        val before = Snapshot(document, caret)
+        recordEditStart()
         val next = document.offsetByCodePoints(caret, 1)
         document = document.substring(0, caret) + document.substring(next)
         documentVersion += 1
+        recordEditEnd(before)
         return documentVersion
+    }
+
+    override fun undo(): Long? {
+        endComposition()
+        if (undoStack.isEmpty()) return null
+        redoStack.addLast(Snapshot(document, caret))
+        val snapshot = undoStack.removeLast()
+        document = snapshot.text
+        caret = snapshot.caret
+        documentVersion += 1
+        return documentVersion
+    }
+
+    override fun redo(): Long? {
+        if (redoStack.isEmpty()) return null
+        undoStack.addLast(Snapshot(document, caret))
+        val snapshot = redoStack.removeLast()
+        document = snapshot.text
+        caret = snapshot.caret
+        documentVersion += 1
+        return documentVersion
+    }
+
+    override fun canUndo(): Boolean =
+        undoStack.isNotEmpty() ||
+            (composing && compositionStart?.let { it.text != document } == true)
+
+    override fun canRedo(): Boolean = redoStack.isNotEmpty()
+
+    override fun clearHistory() {
+        undoStack.clear()
+        redoStack.clear()
+        composing = false
+        compositionStart = null
+    }
+
+    override fun beginComposition() {
+        if (composing) return
+        composing = true
+        compositionStart = Snapshot(document, caret)
+    }
+
+    override fun endComposition() {
+        if (!composing) return
+        composing = false
+        val start = compositionStart
+        compositionStart = null
+        // A cancelled composition (or an identical commit) leaves no step.
+        if (start != null && start.text != document) {
+            undoStack.addLast(start)
+        }
+    }
+
+    private fun recordEditStart() {
+        redoStack.clear()
+    }
+
+    private fun recordEditEnd(
+        before: Snapshot,
+        changed: Boolean = true,
+    ) {
+        if (!changed) return
+        if (composing) {
+            // The group starts at the first edit, before composition began.
+            if (compositionStart == null) compositionStart = before
+        } else {
+            undoStack.addLast(before)
+        }
     }
 
     override fun moveCursor(byteOffset: Int): Int {

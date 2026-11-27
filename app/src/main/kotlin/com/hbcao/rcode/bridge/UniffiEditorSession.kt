@@ -56,6 +56,26 @@ class UniffiEditorSession(
 
     override fun deleteForward(): Long = native.deleteForward().toLong()
 
+    override fun undo(): Long? = native.undo()?.toLong()
+
+    override fun redo(): Long? = native.redo()?.toLong()
+
+    override fun canUndo(): Boolean = native.canUndo()
+
+    override fun canRedo(): Boolean = native.canRedo()
+
+    override fun clearHistory() {
+        native.clearHistory()
+    }
+
+    override fun beginComposition() {
+        native.beginComposition()
+    }
+
+    override fun endComposition() {
+        native.endComposition()
+    }
+
     override fun moveCursor(byteOffset: Int): Int = native.moveCursor(byteOffset.offset()).toInt()
 
     override fun moveCursorHorizontal(deltaChars: Int): Int = native.moveCursorHorizontal(deltaChars).toInt()

@@ -35,8 +35,13 @@ class EditorInputHandler(
     ): Long {
         val start = if (isComposing) composingStartByte else session.cursor().byteOffset
         val end = if (isComposing) composingEndByte else start
+        val wasComposing = isComposing
         clearComposing()
-        return replaceAndPlaceCaret(start, end, text, newCursorPosition)
+        val version = replaceAndPlaceCaret(start, end, text, newCursorPosition)
+        // End the composition *after* the text operation so that committing a
+        // different word (pinyin "nihao" -> "你好") stays in the same undo group.
+        if (wasComposing) session.endComposition()
+        return version
     }
 
     /**
@@ -49,6 +54,7 @@ class EditorInputHandler(
     ): Long {
         val start = if (isComposing) composingStartByte else session.cursor().byteOffset
         val end = if (isComposing) composingEndByte else start
+        if (!isComposing) session.beginComposition()
         val version = replaceAndPlaceCaret(start, end, text, newCursorPosition)
         composingStartByte = start
         composingEndByte = start + Utf8Offsets.utf8Length(text)
@@ -57,6 +63,7 @@ class EditorInputHandler(
 
     /** Ends composing without changing text: the visible composing text is kept. */
     fun finishComposingText() {
+        if (isComposing) session.endComposition()
         clearComposing()
     }
 
@@ -82,9 +89,17 @@ class EditorInputHandler(
         beforeUtf16Units: Int,
         afterUtf16Units: Int,
     ): Long {
+        val wasComposing = isComposing
         val before = session.contextBeforeCursor(beforeUtf16Units.coerceAtLeast(0))
         val after = session.contextAfterCursor(afterUtf16Units.coerceAtLeast(0))
-        return deleteAroundCaret(before, after)
+        val version = deleteAroundCaret(before, after)
+        // Deleting the composing span cancels the composition; ending it after the
+        // edit lets the discard rule drop the no-op group.
+        if (wasComposing) {
+            session.endComposition()
+            clearComposing()
+        }
+        return version
     }
 
     /**
@@ -95,11 +110,17 @@ class EditorInputHandler(
         beforeCodePoints: Int,
         afterCodePoints: Int,
     ): Long {
+        val wasComposing = isComposing
         val beforeWindow = beforeCodePoints.coerceIn(0, MAX_CODE_POINTS) * 2
         val afterWindow = afterCodePoints.coerceIn(0, MAX_CODE_POINTS) * 2
         val before = takeLastCodePoints(session.contextBeforeCursor(beforeWindow), beforeCodePoints.coerceAtLeast(0))
         val after = takeFirstCodePoints(session.contextAfterCursor(afterWindow), afterCodePoints.coerceAtLeast(0))
-        return deleteAroundCaret(before, after)
+        val version = deleteAroundCaret(before, after)
+        if (wasComposing) {
+            session.endComposition()
+            clearComposing()
+        }
+        return version
     }
 
     private fun deleteAroundCaret(

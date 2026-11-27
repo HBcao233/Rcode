@@ -8,6 +8,8 @@ import com.hbcao.rcode.editor.LineEnding
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -53,6 +55,66 @@ class EditorSessionInstrumentedTest {
             assertEquals("你好", session.text())
             assertFalse(handler.isComposing)
             assertEquals(2, session.cursorUtf16Offset())
+
+            // The whole pinyin sequence is a single undo step.
+            assertTrue(session.canUndo())
+            assertNotNull(session.undo())
+            assertEquals("", session.text())
+            assertFalse(session.canUndo())
+        } finally {
+            session.close()
+        }
+    }
+
+    @Test
+    fun undoRedoRoundTripThroughTheFfi() {
+        val session = UniffiEditorSession()
+        try {
+            assertNull(session.undo())
+            assertFalse(session.canUndo())
+            assertFalse(session.canRedo())
+
+            session.insertText("hello")
+            session.endComposition()
+            session.moveCursor(0)
+            session.insertText("X")
+            assertEquals("Xhello", session.text())
+            session.moveCursor(3)
+
+            val undoVersion = session.undo()
+            assertNotNull(undoVersion)
+            assertEquals("hello", session.text())
+            assertEquals(0, session.cursor().byteOffset)
+            assertTrue(session.canRedo())
+
+            val redoVersion = session.redo()
+            assertNotNull(redoVersion)
+            assertEquals("Xhello", session.text())
+            assertEquals(1, session.cursor().byteOffset)
+            assertTrue(redoVersion!! > undoVersion!!)
+        } finally {
+            session.close()
+        }
+    }
+
+    @Test
+    fun clearHistoryAndCompositionBoundariesThroughTheFfi() {
+        val session = UniffiEditorSession()
+        try {
+            session.beginComposition()
+            session.replaceRange(0, 0, "ni")
+            session.replaceRange(0, 2, "你好")
+            session.endComposition()
+            assertEquals("你好", session.text())
+            assertTrue(session.canUndo())
+            assertNotNull(session.undo())
+            assertEquals("", session.text())
+
+            session.insertText("keep")
+            session.clearHistory()
+            assertFalse(session.canUndo())
+            assertFalse(session.canRedo())
+            assertEquals("keep", session.text())
         } finally {
             session.close()
         }
