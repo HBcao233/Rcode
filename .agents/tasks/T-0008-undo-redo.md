@@ -315,7 +315,7 @@ bash ./scripts/build-core.sh                 # 重新生成 Kotlin 绑定，检�
 ## 交接记录
 
 - 日期：2026-11-27
-- 分支与提交：`feat/m1-t8-undo-redo`；实现提交见 `git log`（`feat(buffer): add undo history with time-window grouping` 系列）与本次任务单提交哈希见下一条记录。
+- 分支与提交：`feat/m1-t8-undo-redo`；实现提交 `1938945`（buffer history）、`fd5ad03`（FFI 导出）、`5930f52`（Kotlin 组合与测试），文档提交 `f633bed`；本交接记录为随后一次文档提交（哈希见 `git log`）。
 - 已完成：V1–V12 的本机部分全部完成。`rcode-buffer::history`（`History`/`UndoGroup`、插入/删除/替换/组合四类组、500 ms 合并、64 KiB 合并上限、净空组丢弃、64 MiB 截断、组合边界）；`prop_undo`（A5，1000 用例）与 `prop_history` 属性测试；Criterion `benches/history.rs`；`EditorSession` 新增 7 个导出方法并在所有编辑方法内记录；UniFFI 绑定由 `scripts/build-core.sh` 重新生成；Kotlin `EditorSessionApi`/`UniffiEditorSession`/`FakeEditorSession`/`EditorInputHandler`/`EditorView` 接入；JVM 与仪器测试；architecture、buffer README、glossary、CHANGELOG、backlog、本任务单。
 - 未完成：`MainScreen` 的 Undo/Redo 按钮接线（Q-T8-4，留给 T-0028）；`clear_history()` 在加载文件后的实际调用（T-0011/T-0012）；真机仪器测试未运行。
 - 测试结果：
