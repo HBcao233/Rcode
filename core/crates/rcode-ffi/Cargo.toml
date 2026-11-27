@@ -29,6 +29,10 @@ criterion = { workspace = true }
 name = "ping"
 harness = false
 
+[[bench]]
+name = "open"
+harness = false
+
 [[bin]]
 name = "uniffi-bindgen"
 path = "src/bin/uniffi-bindgen.rs"

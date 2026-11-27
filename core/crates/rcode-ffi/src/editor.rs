@@ -8,6 +8,7 @@
 //! The session is the authoritative owner of text and caret. Kotlin only caches
 //! the viewport returned by [`EditorSession::viewport`] for rendering.
 
+use std::fmt;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
@@ -54,6 +55,19 @@ pub enum EditorError {
         /// Number of lines in the document (always at least 1).
         line_count: u32,
     },
+    /// The bytes passed to [`EditorSession::open`] are not valid UTF-8.
+    #[error("input is not valid UTF-8 at byte offset {offset}")]
+    NotUtf8 {
+        /// Byte offset in the **original** input (BOM included) of the first
+        /// byte that does not start a valid UTF-8 sequence.
+        offset: u32,
+    },
+    /// The bytes passed to [`EditorSession::open`] are UTF-16/UTF-32 or binary.
+    #[error("unsupported encoding: {kind}")]
+    UnsupportedEncoding {
+        /// What was detected.
+        kind: UnsupportedEncodingKind,
+    },
 }
 
 impl From<BufferError> for EditorError {
@@ -73,6 +87,70 @@ impl From<BufferError> for EditorError {
             BufferError::LineOutOfBounds { line, line_count } => EditorError::LineOutOfBounds {
                 line: to_u32(line),
                 line_count: to_u32(line_count),
+            },
+        }
+    }
+}
+
+impl From<codec::CodecError> for EditorError {
+    fn from(error: codec::CodecError) -> Self {
+        match error {
+            codec::CodecError::NotUtf8 { offset } => EditorError::NotUtf8 {
+                offset: to_u32(offset),
+            },
+            codec::CodecError::UnsupportedEncoding { kind } => {
+                EditorError::UnsupportedEncoding { kind: kind.into() }
+            }
+        }
+    }
+}
+
+/// Why [`EditorSession::open`] rejected text that is not UTF-8.
+///
+/// FFI mirror of [`rcode_fs::codec::UnsupportedKind`]; the offsets index the
+/// original input bytes, BOM included (same unit as `codec::decode`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum UnsupportedEncodingKind {
+    /// Input starts with a UTF-16 little-endian BOM (`FF FE`).
+    Utf16Le,
+    /// Input starts with a UTF-16 big-endian BOM (`FE FF`).
+    Utf16Be,
+    /// Input starts with a UTF-32 little-endian BOM (`FF FE 00 00`).
+    Utf32Le,
+    /// Input starts with a UTF-32 big-endian BOM (`00 00 FE FF`).
+    Utf32Be,
+    /// Input contains a `NUL` byte (`U+0000`), typical of binary files.
+    Binary {
+        /// Byte offset of the first `NUL` in the original input.
+        nul_offset: u32,
+    },
+}
+
+// Hand-written so `EditorError`'s message never depends on how the codec formats
+// its own errors; this is display text for the FFI type only.
+impl fmt::Display for UnsupportedEncodingKind {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Utf16Le => formatter.write_str("UTF-16 little-endian text"),
+            Self::Utf16Be => formatter.write_str("UTF-16 big-endian text"),
+            Self::Utf32Le => formatter.write_str("UTF-32 little-endian text"),
+            Self::Utf32Be => formatter.write_str("UTF-32 big-endian text"),
+            Self::Binary { nul_offset } => {
+                write!(formatter, "binary data (NUL byte at offset {nul_offset})")
+            }
+        }
+    }
+}
+
+impl From<codec::UnsupportedKind> for UnsupportedEncodingKind {
+    fn from(kind: codec::UnsupportedKind) -> Self {
+        match kind {
+            codec::UnsupportedKind::Utf16Le => Self::Utf16Le,
+            codec::UnsupportedKind::Utf16Be => Self::Utf16Be,
+            codec::UnsupportedKind::Utf32Le => Self::Utf32Le,
+            codec::UnsupportedKind::Utf32Be => Self::Utf32Be,
+            codec::UnsupportedKind::Binary { nul_offset } => Self::Binary {
+                nul_offset: to_u32(nul_offset),
             },
         }
     }
@@ -174,6 +252,32 @@ impl From<codec::DocumentFormat> for DocumentFormat {
     }
 }
 
+impl DocumentFormat {
+    /// Format of a document without a file behind it: no BOM, `\n` endings.
+    pub(crate) fn new_file() -> Self {
+        Self {
+            bom: false,
+            line_ending: LineEnding::Lf,
+        }
+    }
+}
+
+/// A document loaded by [`EditorSession::open`].
+///
+/// Contains no text: Kotlin renders from [`EditorSession::viewport`] and never
+/// keeps the full document as authoritative state (`architecture.md` §3.1).
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct OpenedDocument {
+    /// New document version; `open` always increments it.
+    pub version: u64,
+    /// Total logical lines after loading (always at least 1).
+    pub line_count: u32,
+    /// Format `codec::decode` detected; same as [`EditorSession::format`].
+    pub format: DocumentFormat,
+    /// Caret after loading: always `byte_offset = 0`, `line = 0`.
+    pub cursor: EditorCursor,
+}
+
 /// The bytes of one save plus the document version they encode.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct EncodedDocument {
@@ -208,6 +312,8 @@ struct Doc {
     history: History,
     /// Caret as a UTF-8 byte offset; always on a character boundary.
     cursor: usize,
+    /// Format to save the document with, set by `codec::decode` on open.
+    format: DocumentFormat,
 }
 
 impl Doc {
@@ -216,6 +322,7 @@ impl Doc {
             buffer: TextBuffer::new(),
             history: History::default(),
             cursor: 0,
+            format: DocumentFormat::new_file(),
         }
     }
 
@@ -246,6 +353,52 @@ impl EditorSession {
         Arc::new(Self {
             inner: Mutex::new(Doc::new()),
         })
+    }
+
+    /// Replaces the current document with `bytes` decoded as UTF-8 text.
+    ///
+    /// This is the only way to load a file: the bytes are decoded by
+    /// `rcode-fs::codec` inside Rust, so BOM stripping and `\r\n` normalization
+    /// happen before the text reaches the buffer, and the detected
+    /// [`DocumentFormat`] is stored in the session for [`Self::encode`].
+    ///
+    /// Opening is not an edit: undo/redo history is cleared, the caret moves to
+    /// offset 0, and the version increments exactly once (even when the new text
+    /// equals the old one). The call is `O(n)` and must run off the UI thread.
+    ///
+    /// On failure nothing changes: text, format, caret, version and history stay
+    /// exactly as they were, because decoding happens before the lock is taken.
+    ///
+    /// # Errors
+    ///
+    /// [`EditorError::NotUtf8`] or [`EditorError::UnsupportedEncoding`] when the
+    /// input is not UTF-8 text (Q1: M1 rejects other encodings).
+    pub fn open(&self, bytes: Vec<u8>) -> Result<OpenedDocument, EditorError> {
+        // Decode outside the lock: it is the expensive part (~45 ms for 10 MB)
+        // and a failure must not touch the session at all.
+        let decoded = codec::decode(&bytes)?;
+        // Release the caller's copy before taking the bigger rope allocation.
+        drop(bytes);
+        let mut doc = self.lock();
+        let version = doc.buffer.reset(&decoded.text);
+        drop(decoded.text);
+        doc.history.clear();
+        doc.cursor = 0;
+        doc.format = decoded.format.into();
+        Ok(OpenedDocument {
+            version,
+            line_count: to_u32(doc.buffer.line_count()),
+            format: doc.format,
+            cursor: doc.cursor_info(),
+        })
+    }
+
+    /// Format detected when the current document was opened (BOM + line ending).
+    ///
+    /// Pass this to [`Self::encode`] when saving. An untitled document that was
+    /// never opened reports no BOM and `\n` endings.
+    pub fn format(&self) -> DocumentFormat {
+        self.lock().format
     }
 
     /// Returns the full document text. Intended for tests and diagnostics; the UI
@@ -390,6 +543,7 @@ impl EditorSession {
             buffer,
             history,
             cursor,
+            ..
         } = &mut *doc;
         let result = history.undo(|group| {
             buffer
@@ -418,6 +572,7 @@ impl EditorSession {
             buffer,
             history,
             cursor,
+            ..
         } = &mut *doc;
         let result = history.redo(|group| {
             buffer
@@ -804,15 +959,6 @@ mod tests {
         DocumentFormat { bom, line_ending }
     }
 
-    // Test helper: fails the test if decoding unexpectedly errors.
-    #[allow(clippy::panic)]
-    fn decode_ok(bytes: &[u8]) -> codec::DecodedText {
-        match codec::decode(bytes) {
-            Ok(decoded) => decoded,
-            Err(error) => panic!("decode failed: {error}"),
-        }
-    }
-
     #[test]
     fn encode_empty_document() {
         let session = EditorSession::new();
@@ -1005,7 +1151,7 @@ mod tests {
     }
 
     /// A6: every T-0009 fixture round-trips through
-    /// `decode -> insert_text -> encode`. Mixed line endings are excluded by
+    /// `open -> encode(format())`. Mixed line endings are excluded by
     /// Q-T9-2, so all twelve fixtures here have uniform endings.
     #[test]
     fn a6_fixtures_round_trip_through_the_session() {
@@ -1032,15 +1178,179 @@ mod tests {
             ("cr_before_crlf", b"a\r\r\nb\r\n"),
         ];
         for (name, bytes) in fixtures {
-            let decoded = decode_ok(bytes);
             let session = EditorSession::new();
-            session.insert_text(decoded.text.clone());
-            let encoded = session.encode(decoded.format.into());
-            assert_eq!(encoded.version, session.version());
+            let opened = open_ok(&session, bytes);
+            let encoded = session.encode(session.format());
+            assert_eq!(encoded.version, opened.version);
             assert_eq!(
                 encoded.bytes, bytes,
                 "fixture {name} did not round-trip through the session"
             );
+            // The format is the decoded one, and it is what `format()` reports.
+            assert_eq!(opened.format, session.format());
         }
+    }
+
+    // Test helper: fails the test if opening unexpectedly errors.
+    #[allow(clippy::panic)]
+    fn open_ok(session: &EditorSession, bytes: &[u8]) -> OpenedDocument {
+        match session.open(bytes.to_vec()) {
+            Ok(opened) => opened,
+            Err(error) => panic!("open failed: {error}"),
+        }
+    }
+
+    #[test]
+    fn a_new_session_is_an_empty_untitled_document() {
+        let session = EditorSession::new();
+        assert_eq!(session.format(), format(false, LineEnding::Lf));
+        assert_eq!(session.text(), "");
+        assert_eq!(session.line_count(), 1);
+        assert_eq!(session.cursor().byte_offset, 0);
+        assert!(!session.can_undo());
+        assert!(!session.can_redo());
+    }
+
+    #[test]
+    fn open_normalizes_crlf_and_strips_the_bom() {
+        let session = EditorSession::new();
+        let opened = open_ok(&session, b"\xEF\xBB\xBFone\r\ntwo\r\n");
+        assert_eq!(session.text(), "one\ntwo\n");
+        assert_eq!(opened.line_count, 3);
+        assert_eq!(session.line_count(), 3);
+        assert_eq!(opened.format, format(true, LineEnding::CrLf));
+        assert_eq!(session.format(), format(true, LineEnding::CrLf));
+        assert_eq!(opened.cursor, session.cursor());
+        assert_eq!(opened.cursor.byte_offset, 0);
+        assert_eq!((opened.cursor.line, opened.cursor.column_bytes), (0, 0));
+        assert_eq!(opened.version, session.version());
+    }
+
+    #[test]
+    fn open_reports_lf_empty_and_unterminated_files() {
+        let session = EditorSession::new();
+        let opened = open_ok(&session, b"one\ntwo");
+        assert_eq!(session.text(), "one\ntwo");
+        assert_eq!(opened.line_count, 2);
+        assert_eq!(opened.format, format(false, LineEnding::Lf));
+
+        let opened = open_ok(&session, b"");
+        assert_eq!(session.text(), "");
+        assert_eq!(opened.line_count, 1);
+        assert_eq!(opened.format, format(false, LineEnding::Lf));
+        let viewport = session.viewport(0, 10);
+        assert_eq!(viewport.line_count, 1);
+        assert_eq!(viewport.lines[0].text, "");
+
+        // A file without a trailing newline has no extra empty last line.
+        let opened = open_ok(&session, b"a\nb");
+        assert_eq!(opened.line_count, 2);
+        assert_eq!(session.viewport(0, 10).lines[1].text, "b");
+    }
+
+    #[test]
+    fn open_discards_edits_history_and_caret() {
+        let session = EditorSession::new();
+        session.insert_text("draft".to_string());
+        session.end_composition();
+        let before = session.version();
+        assert!(session.can_undo());
+        session.move_cursor(2);
+
+        let opened = open_ok(&session, b"loaded\nfile\n");
+        assert!(opened.version > before);
+        assert_eq!(opened.version, session.version());
+        assert_eq!(session.text(), "loaded\nfile\n");
+        assert_eq!(session.cursor().byte_offset, 0);
+        assert!(!session.can_undo(), "opening must not be undoable");
+        assert!(!session.can_redo());
+        assert_eq!(session.undo(), None);
+        assert_eq!(session.redo(), None);
+    }
+
+    #[test]
+    fn opening_identical_bytes_still_bumps_the_version() {
+        let session = EditorSession::new();
+        let first = open_ok(&session, b"same\n");
+        let second = open_ok(&session, b"same\n");
+        assert_eq!(second.version, first.version + 1);
+        assert_eq!(session.version(), second.version);
+        assert_eq!(session.text(), "same\n");
+    }
+
+    #[test]
+    #[allow(clippy::panic)]
+    fn open_reports_the_offset_of_invalid_utf8() {
+        let session = EditorSession::new();
+        match session.open(b"ok\xFFbad".to_vec()) {
+            Err(EditorError::NotUtf8 { offset }) => assert_eq!(offset, 2),
+            Err(other) => panic!("unexpected error: {other}"),
+            Ok(_) => panic!("invalid UTF-8 must be rejected"),
+        }
+    }
+
+    #[test]
+    #[allow(clippy::panic)]
+    fn open_rejects_unsupported_encodings_and_binary() {
+        let session = EditorSession::new();
+        let cases: [(&[u8], UnsupportedEncodingKind); 5] = [
+            (&[0xFF, 0xFE, b'a', 0x00], UnsupportedEncodingKind::Utf16Le),
+            (&[0xFE, 0xFF, 0x00, b'a'], UnsupportedEncodingKind::Utf16Be),
+            (&[0xFF, 0xFE, 0x00, 0x00], UnsupportedEncodingKind::Utf32Le),
+            (&[0x00, 0x00, 0xFE, 0xFF], UnsupportedEncodingKind::Utf32Be),
+            (
+                b"binary\x00data",
+                UnsupportedEncodingKind::Binary { nul_offset: 6 },
+            ),
+        ];
+        for (bytes, expected) in cases {
+            match session.open(bytes.to_vec()) {
+                Err(EditorError::UnsupportedEncoding { kind }) => assert_eq!(kind, expected),
+                Err(other) => panic!("unexpected error for {expected:?}: {other}"),
+                Ok(_) => panic!("input {expected:?} must be rejected"),
+            }
+        }
+    }
+
+    #[test]
+    fn failed_open_keeps_text_format_caret_version_and_history() {
+        let session = EditorSession::new();
+        open_ok(&session, b"\xEF\xBB\xBFkeep\r\nme\r\n");
+        session.end_composition();
+        session.insert_text("!".to_string());
+        session.end_composition();
+        session.move_cursor(1);
+
+        let text = session.text();
+        let format = session.format();
+        let cursor = session.cursor();
+        let version = session.version();
+        assert!(session.can_undo());
+
+        for bad in [
+            b"\xFF".to_vec(),
+            vec![0xFF, 0xFE, 0x00, 0x00],
+            b"nul\x00".to_vec(),
+        ] {
+            assert!(session.open(bad).is_err());
+            assert_eq!(session.text(), text);
+            assert_eq!(session.format(), format);
+            assert_eq!(session.cursor(), cursor);
+            assert_eq!(session.version(), version);
+            assert!(session.can_undo());
+        }
+
+        // The history still belongs to the document that was open before.
+        assert_eq!(session.undo(), Some(version + 1));
+    }
+
+    #[test]
+    fn open_handles_a_megabyte_document() {
+        let session = EditorSession::new();
+        let text = "a\n中🙂".repeat(256 * 1024);
+        let opened = open_ok(&session, text.as_bytes());
+        assert_eq!(opened.line_count as usize, 256 * 1024 + 1);
+        assert_eq!(session.text(), text);
+        assert_eq!(session.viewport(0, 2).lines[0].text, "a");
     }
 }

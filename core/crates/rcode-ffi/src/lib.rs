@@ -7,7 +7,7 @@ mod editor;
 
 pub use editor::{
     DocumentFormat, EditorCursor, EditorError, EditorLine, EditorSession, EditorViewport,
-    EncodedDocument, LineEnding,
+    EncodedDocument, LineEnding, OpenedDocument, UnsupportedEncodingKind,
 };
 
 use std::sync::Once;
