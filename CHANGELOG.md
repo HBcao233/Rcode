@@ -132,3 +132,37 @@ All notable changes are documented here. Format follows Keep a Changelog.
   bridge and JVM fake). Added instrumented tests for BOM+CRLF opening, the
   open → insert → undo → viewport flow, history reset, rejected encodings keeping
   the document intact, and repeated opening.
+
+### T-0012 (SAF open: URI → Rust decode → editor state)
+- Added `platform/document/DocumentIo`: `DocumentKey` (SAF URI as a string, so
+  `state` and JVM tests never depend on `android.net.Uri`), `ReadDocument`,
+  `DocumentReadException` (`NotFound`, `PermissionDenied`, `TooLarge`, `Io`) and the
+  production `ContentResolverDocumentIo`. It reads the whole document into one
+  `ByteArray` with a hard 64 MiB cap (Q-T12-3, stops reading instead of loading),
+  takes the picker's persisted read/write grant (read-only providers and `file://`
+  URIs still open with `canWrite = false`), resolves the display name from
+  `OpenableColumns.DISPLAY_NAME` with a `lastPathSegment` fallback, and hands the
+  same URI to T-0013 as a `ContentResolverDocument`.
+- Added the open flow to `MainViewModel`: `openDocument` reads on the I/O
+  dispatcher and calls `EditorSession.open` on the work dispatcher, asks before
+  opening files above 10 MiB (Q6), asks before discarding unsaved edits
+  (`session.version() != lastLoadedVersion`, Q-T12-4), maps every failure to an
+  `OpenFailure` without touching the current document, serializes overlapping
+  requests, releases the replaced document's grant (Q-T12-5) and logs
+  `read`/`decode` timings plus stack traces for unexpected errors. `currentDocument`
+  exposes the `SavableDocument` T-0013 will save into.
+- Added the SAF entry point and document UI: `ACTION_OPEN_DOCUMENT` with read+write
+  grant flags (Q-T12-2, no MIME filter per Q-T12-1), the file name as the title with
+  a `*` while dirty and a read-only marker, an "opening…" indicator, a large-file
+  dialog, a discard-changes dialog and a snackbar for failures. New strings are in
+  `values/strings.xml` and `values-zh-rCN/strings.xml`.
+- Added `EditorView.onDocumentOpened()` / `showDocument(documentId)`: resets the
+  viewport to the first line and calls `InputMethodManager.restartInput` because the
+  composing range and surrounding text are stale after `open` (Q-T12-6). The view
+  now reports version changes back to the view model, which is how `*` appears.
+- Added JVM tests for every open-flow branch (success, read-only, large-file
+  confirm/cancel, each read and decode failure, unexpected failure logging, dirty
+  confirmation, re-entrancy, cancellation, grant release) and instrumented tests for
+  `ContentResolverDocumentIo` (whole-document read, display-name fallback, size cap,
+  not-found, no-op release, BOM+CRLF round trip through the session) and for the
+  viewport reset after opening.

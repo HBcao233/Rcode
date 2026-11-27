@@ -3,9 +3,9 @@
 - **ID**：T-0012
 - **里程碑**：M1（A1 的“选定文件到首屏”第一步、A6/A7 的前置、A12 的“打开”步骤；G2）
 - **类型**：feat
-- **状态**：Ready（待 Q-T12-1..7 确认）
-- **分支**：`feat/m1-t12-saf-open`（已创建）
-- **负责人**：未领取
+- **状态**：Review（实现与自动化检查完成；仪器测试与真机 SAF 用例待设备）
+- **分支**：`feat/m1-t12-saf-open`（已创建，基线 `504b849`）
+- **负责人**：deepseek-v4p1-flash-1017（领取于 2026-11-25）
 - **涉及模块**：platform（新增按 URI 读取，复用 `ContentResolverDocument`）、state（`MainViewModel`、新增文档 UI 状态）、ui（`MainScreen` 的 SAF 入口、标题、错误/确认对话框、`strings.xml`）、editor（`EditorView` 的“文档已替换”钩子）、bridge（不改）
 - **相关 skill**：kotlin-compose-ui、testing-qa；涉及读取字节与 SAF 权限时参考 android-build；不改 IME 状态机与 Rust，不需要 rust-core / uniffi-bridge / editor-rendering（渲染本身由 T-0014 负责）
 
@@ -202,18 +202,29 @@ fun onDocumentOpened() {
 
 ## 验收标准
 
-- [ ] **V1** 从“打开文件”菜单能启动系统 SAF 选择器；选中文本文件后编辑器显示其内容，标题显示 provider 的显示名（无显示名时回退到 URI 末段）。
-- [ ] **V2** 打开后 `OpenedDocumentState` 的 `version`/`lineCount`/`format`/`cursor` 与随后 `session.version()`/`lineCount()`/`format()`/`cursor()` 一致；撤销/重做历史为空；光标在 0（复用 T-0011 的语义）。
+- [x] **V1** 从“打开文件”菜单能启动系统 SAF 选择器；选中文本文件后编辑器显示其内容，标题显示 provider 的显示名（无显示名时回退到 URI 末段）。
+  - 代码完成：`OpenDocumentWithWriteAccess` + 菜单接线 + `documentTitle`；JVM 覆盖显示名/回退。真机选择器用例未运行（`adb devices` 为空）。
+- [x] **V2** 打开后 `OpenedDocumentState` 的 `version`/`lineCount`/`format`/`cursor` 与随后 `session.version()`/`lineCount()`/`format()`/`cursor()` 一致；撤销/重做历史为空；光标在 0（复用 T-0011 的语义）。
+  - 由 T-0011 的 `openDecodesBomAndCrlfAndStoresTheFormat` / `openDiscardsTheHistoryOfThePreviousDocument` 断言；本任务 JVM 断言打开后 `dirty == false`（即 `session.version() == lastLoadedVersion`）与文本一致。
 - [ ] **V3** BOM + CRLF 文件打开后：编辑器只显示 `\n` 换行内容、`format()` 为 BOM+CRLF，T-0013 可直接保存（由 `ContentResolverDocumentIoInstrumentedTest` 断言 `open → encode(format())` 字节一致，A6 的 Kotlin 侧前一半）。
-- [ ] **V4** 超过 10 MiB 的文件先弹出确认（显示大小），取消后文档与状态不变、旧文档权限不释放；继续后正常打开。
-- [ ] **V5** 读取失败（文件不存在、权限被拒、超过硬上限）与解码失败（非 UTF-8、UTF-16/32、含 NUL）分别显示对应文案；编辑器内容、标题、`format`、光标、版本与打开前完全一致；异常不被静默吞掉（未知异常记录并保留原状态）。
-- [ ] **V6** 已有编辑（dirty）时再次打开会先确认“放弃未保存修改”；取消则原文档与内容不变；确认才替换。`*` 标记随脏状态出现/消失。
+  - 用例 `bomAndCrlfDocumentRoundTripsThroughTheSession` 已写并通过编译；**未运行**（无设备）。
+- [x] **V4** 超过 10 MiB 的文件先弹出确认（显示大小），取消后文档与状态不变、旧文档权限不释放；继续后正常打开。
+  - JVM：`large file asks first and confirm opens it`、`cancelling the large-file prompt keeps the document and releases the new grant`（只释放新 URI，旧 URI 不动）。
+- [x] **V5** 读取失败（文件不存在、权限被拒、超过硬上限）与解码失败（非 UTF-8、UTF-16/32、含 NUL）分别显示对应文案；编辑器内容、标题、`format`、光标、版本与打开前完全一致；异常不被静默吞掉（未知异常记录并保留原状态）。
+  - JVM：`read failures surface as failures and keep the current document`、`unsupported files are rejected without touching the document`、`unexpected failures are logged and never swallowed`。
+- [x] **V6** 已有编辑（dirty）时再次打开会先确认“放弃未保存修改”；取消则原文档与内容不变；确认才替换。`*` 标记随脏状态出现/消失。
+  - JVM：`edits make the document dirty and opening another file asks first`、`untitled edits ask before being discarded`；`*` 由 `dirty` + `editor_title_modified` 渲染（真机视觉未验证）。
 - [ ] **V7** URI 持久权限已获取（读写，provider 支持时），`ContentResolverDocument.canWrite`/`canWrite` 反映实际授权；打开新文档时释放旧文档权限；provider 只给读权限时仍可打开且状态显示只读。
-- [ ] **V8** 打开期间重复触发不会并发读取/装载（串行化），读取中取消协程不产生状态更新；无设备时此项由 JVM 测试覆盖。
+  - 实现完成（先请求读写、失败回退只读，`canWrite` 反映结果；释放旧 URI 有 JVM 覆盖）；`file://` 的只读/无授权路径用例已写，**未运行**；真机 provider 读写持久权限待验证。
+- [x] **V8** 打开期间重复触发不会并发读取/装载（串行化），读取中取消协程不产生状态更新；无设备时此项由 JVM 测试覆盖。
+  - JVM：`a second request while reading is ignored`、`cancelling a read publishes no failure`。
 - [ ] **V9** `EditorView.onDocumentOpened()`：`firstLine = 0`、视口重载、`restartInput()` 被调用；打开大文件后首屏从第 0 行开始（仪器测试断言 `firstLine` 与首行内容）。
+  - `EditorDocumentOpenInstrumentedTest` 已写（先滚动再换文档，断言 `firstVisibleLine == 0` 与首行文本）；**未运行**（无设备）。
 - [ ] **V10** 记录分段耗时（读字节 / `session.open` / 首屏刷新）并写入交接记录，注明设备与文件大小；A1 的正式判定留给 T-0025。
-- [ ] **V11** DoD：`cargo fmt/clippy/test`（不应改 Rust，仍要跑）、`ktlintCheck`、`lintDebug`、`testDebugUnitTest`、`assembleDebug`、`compileDebugAndroidTestKotlin`；有设备时 `connectedDebugAndroidTest`。
-- [ ] **V12** 文档与状态：`architecture.md` §3.2、`glossary.md`、`CHANGELOG.md`、`tasks/backlog.md`、本任务单交接记录已更新；未新增依赖、未改 Manifest/权限/签名/包名。
+  - 测量代码完成：`MainViewModel` 通过注入的 `logger` 输出 `open: read=…ms decode=…ms bytes=…`（`MainActivity` 打到 logcat tag `rcode-open`），`EditorView` 输出 `first viewport after open: …ms`（tag `rcode-editor`）。**无设备，未取数值**。
+- [x] **V11** DoD：`cargo fmt/clippy/test`（不应改 Rust，仍要跑）、`ktlintCheck`、`lintDebug`、`testDebugUnitTest`、`assembleDebug`、`compileDebugAndroidTestKotlin`；有设备时 `connectedDebugAndroidTest`。
+  - 前六项在本机会话全部通过（见交接记录）；`connectedDebugAndroidTest` **未运行**（无设备）。
+- [x] **V12** 文档与状态：`architecture.md` §3.2、`glossary.md`、`CHANGELOG.md`、`tasks/backlog.md`、本任务单交接记录已更新；未新增依赖、未改 Manifest/权限/签名/包名。
 
 ## 计划
 
@@ -223,6 +234,20 @@ fun onDocumentOpened() {
 4. **UI 接线**：SAF 启动器（读写持久权限）、菜单、标题、对话框、字符串资源；`EditorView.onDocumentOpened()`；`MainActivity` 注入。
 5. **验证与测量**：仪器测试（打开后首帧、A6 字节一致）、10 MB 分段计时；无设备项记录原因。
 6. **文档与收尾**：architecture、glossary、CHANGELOG、backlog、任务单；完整 DoD；按 `task-handoff` skill 写交接记录。
+
+### 实施记录（2026-11-25）与计划偏差
+
+计划中的步骤按顺序完成。与原设计不同的三处，均有明确原因：
+
+1. **`DocumentKey` 代替 `Uri` 进入 `state`**：`MainViewModel` 与 `DocumentUiState`/`OpenRequest` 只持有 `DocumentKey`（URI 字符串 + `platform` 层转换）。原设计让 `state` 直接持 `android.net.Uri`，但 JVM 单测里 `Uri.parse` 属“not mocked”，会迫使引入 Robolectric（新依赖，需审批）。现在 JVM 测试完全不碰 Android 类型。
+2. **`DocumentUiState` 拆成“稳定文档状态 + 瞬时请求/错误/脏状态”**：原设计把 `Reading`/`LargeFilePending`/`Failed` 都塞进同一个 sealed 接口，与 V4/V5/V6 的“取消或失败后文档与状态不变”矛盾（置为 `LargeFilePending` 就已经改变了状态）。现在：
+   - `DocumentUiState`：`Untitled` / `Opened(fileName, canWrite, documentId)`（`documentId` 用于通知 `EditorView` 重置视口）；
+   - `OpenRequest`（`Reading` / `ConfirmDiscard` / `ConfirmLargeFile`）：瞬时，取消即清空；
+   - `openError`（`OpenFailure?`）：一次性事件，UI 展示后 `dismissOpenError()`；
+   - `dirty: StateFlow<Boolean>`：由 `EditorView` 在版本变化时回调 `onDocumentVersionChanged(version)` 维护（版本号来自已有的 `viewport()` 返回值，不增加 FFI 调用）。
+3. **耗时/异常通过注入的 `logger: (String, Throwable?) -> Unit` 输出**：`state` 层不依赖 `android.util.Log`（JVM 测试可注入收集器，同时满足“未知异常必须记录、不默吞掉”）。`MainActivity` 把它接到 logcat。
+
+另外：`EditorView` 新增 `onVersionChanged` 回调、`showDocument(documentId)`、`firstVisibleLine`（供 V9 断言），首次视口耗时用 `android.util.Log` 输出；`FakeEditorSession` 增加 `openFailure` 测试钩子用于错误映射。改动约 500 行生产代码 + 约 500 行测试，超过 `conventions.md` §1 的 400 行建议；因该任务是单一纵切（读取层 → 状态机 → UI 接线互为依赖，拆开无法编译），未再拆分，请在审查时确认。
 
 ## 测试方案
 
@@ -249,10 +274,30 @@ cd ..
 
 ## 交接记录
 
-- 日期：
-- 分支与提交：
+- 日期：2026-11-25（领取 + 实现 + 交接，负责人 deepseek-v4p1-flash-1017）
+- 分支与提交：`feat/m1-t12-saf-open`，基线 `504b849`；`1849be0 feat(platform): read documents through SAF with a size cap`、`489706c feat(editor): open documents through SAF into the Rust session`（本交接记录在随后的 docs 提交中，`HEAD` 以 `git log` 为准）。
 - 已完成：
-- 未完成：
-- 测试结果：
-- 基准：
+  - `platform/document`：`DocumentKey`、`ReadDocument`、`DocumentReadException`（`NotFound`/`PermissionDenied`/`TooLarge`/`Io`）、`DocumentIo`；`ContentResolverDocumentIo` 一次性读完整字节（硬上限 64 MiB，Q-T12-3）、`OpenableColumns.DISPLAY_NAME` + `lastPathSegment` 回退、读写持久权限（不足则回退只读，`canWrite` 反映结果）、复用 `ContentResolverDocument` 作 `savable`、`release` 容错。
+  - `state`：`DocumentUiState`、`OpenRequest`、`OpenFailure`；`MainViewModel.openDocument` 完成脏确认 → 读字节（I/O）→ 大文件确认（Q6）→ `session.open`（工作调度器）→ 更新 `currentDocument`/`currentKey`/`lastLoadedVersion`/`documentId`/`dirty` → 释放旧 URI 权限（Q-T12-5）；失败只写 `openError`，文档状态不变；重复请求被忽略；取消不映射为失败；未知异常带堆栈记录并映射为 `Internal`。
+  - `ui`：`OpenDocumentWithWriteAccess`（`ACTION_OPEN_DOCUMENT` + 读写 flag，Q-T12-2；MIME 为 `*/*`，Q-T12-1）、菜单接线、标题（文件名/`*`/只读）、正在打开指示、大文件与放弃修改对话框、`Snackbar` 错误提示；新增 20 条 en/zh 字符串。
+  - `editor`：`EditorView.onDocumentOpened()`（`finishComposingText` + `firstLine=0` + 重载视口 + `restartInput`，Q-T12-6）、`showDocument(documentId)`、`firstVisibleLine`、`onVersionChanged` 回调、首次视口耗时日志。
+  - 测试：JVM `MainViewModelTest` 扩到 15 个用例（新增 12 个开流程用例 + 假 `DocumentIo`/`SavableDocument`）；仪器 `ContentResolverDocumentIoInstrumentedTest`（5 个）与 `EditorDocumentOpenInstrumentedTest`（V9）。
+  - 文档：`architecture.md` §3.2、`glossary.md`（文档句柄/脏状态/大文件确认）、`CHANGELOG.md`、`tasks/backlog.md`、本任务单。
+- 未完成 / 需人类或设备：
+  - **仪器测试未运行**：`adb devices` 为空（与 T-0007/T-0010/T-0011 相同）。需在有设备时运行 `./gradlew :app:connectedDebugAndroidTest`，重点看 `ContentResolverDocumentIoInstrumentedTest`（`file://` 读取、显示名回退、超限、未找到、release 无授权）与 `EditorDocumentOpenInstrumentedTest`（换文档后 `firstVisibleLine == 0`）。
+  - **真机 SAF 手动用例未做**：UTF-8、BOM+CRLF、非 UTF-8（UTF-16/二进制）、>10 MiB、只读文档各一次；确认取消/失败路径不破坏当前文档；确认 `takePersistableUriPermission` 在读写/只读 provider 上的实际结果（`canWrite`）。
+  - **V10 分段耗时未测量**：无设备。测量点：logcat `rcode-open`（`open: read=…ms decode=…ms bytes=…`，来自 `MainViewModel`）与 `rcode-editor`（`first viewport after open: …ms`）。
+  - **`*` 与只读标记的视觉验证**未做（仅 JVM 状态断言 + 编译通过）。
+- 测试结果（实际命令与结果）：
+  - `cd core && cargo fmt --all -- --check`：通过。
+  - `cd core && cargo clippy --workspace --all-targets -- -D warnings`：通过（0 警告）。
+  - `cd core && cargo test --workspace`：通过（rcode-buffer 33 + prop 1 + prop 3 + prop 1；rcode-ffi 36；rcode-fs 23 + prop 3，其余 doctest 0）。本任务未改 Rust。
+  - `./gradlew :app:testDebugUnitTest`：BUILD SUCCESSFUL，55 个用例全部通过（`MainViewModelTest` 15、`EditorInputHandlerTest` 18、`AtomicDocumentSaverTest` 10、`Utf8OffsetsTest` 4，加上其它类）。
+  - `./gradlew :app:ktlintCheck :app:lintDebug :app:testDebugUnitTest :app:assembleDebug :app:compileDebugAndroidTestKotlin`：BUILD SUCCESSFUL。`lintDebug` 仅剩既有警告（`ViewConstructor` for `EditorView`、依赖版本提示等，未新增告警类别）。
+  - `./gradlew :app:connectedDebugAndroidTest`：**未运行**（无设备）。
+- 基准：无（无设备，V10 未取数）。设计上只新增分段日志，不改热路径。
 - 下一步建议：
+  1. 审查重点：`MainViewModel` 的打开顺序与失败/取消路径（特别是“取消大文件确认只释放新 URI”和 `NonCancellable` 释放旧权限）；`DocumentUiState` 拆分是否可接受（见“实施记录”偏差 2）；`ContentResolverDocumentIo` 的权限回退逻辑。
+  2. 有设备后先跑 `connectedDebugAndroidTest`，再按测试方案做 5 个手动 SAF 用例，把 V3/V7/V9/V10 打勾并补 `canWrite`/耗时数值。
+  3. T-0013 接线时：`currentDocument` 即 `SavableDocument`，保存用 `editorSession.encode(editorSession.format())`，成功后把 `lastLoadedVersion` 改为 `encoded.version`（Q-T12-4）；`canWrite == false` 时走“另存为”。
+  4. T-0014 可直接用 `documentId` 作为布局缓存键的一部分（本任务已把它从 `Open` 成功递增）。
