@@ -3,7 +3,7 @@
 - **ID**：T-0012
 - **里程碑**：M1（A1 的“选定文件到首屏”第一步、A6/A7 的前置、A12 的“打开”步骤；G2）
 - **类型**：feat
-- **状态**：Review（实现与自动化检查完成；仪器测试与真机 SAF 用例待设备）
+- **状态**：Reviewed by HBcao（实现与自动化检查完成；手动安装apk SAF 可以打开文件）
 - **分支**：`feat/m1-t12-saf-open`（已创建，基线 `504b849`）
 - **负责人**：deepseek-v4p1-flash-1017（领取于 2026-11-25）
 - **涉及模块**：platform（新增按 URI 读取，复用 `ContentResolverDocument`）、state（`MainViewModel`、新增文档 UI 状态）、ui（`MainScreen` 的 SAF 入口、标题、错误/确认对话框、`strings.xml`）、editor（`EditorView` 的“文档已替换”钩子）、bridge（不改）

@@ -128,18 +128,21 @@
   - 任务单 `T-0010-atomic-save.md` - Reviewed（`feat/m1-atomic-save`）
 
 - [x] **T-0008 撤销/重做与操作合并**（依赖 T-0007，Q9、Q15）
-  - 任务单 `T-0008-undo-redo.md` - Reviewed（`feat/m1-t8-undo-redo`）
+  - 任务单 `T-0008-undo-redo.md` - Reviewed（分支 `feat/m1-t8-undo-redo`）
   - 验收：A5 的 proptest 通过；500 ms 内连续插入合并为一步；换行断开合并。
 
 - [x] **T-0011 编辑会话 FFI**（依赖 T-0007、T-0008、T-0009）
-  - 任务单 `T-0011-edit-session.md` - Reviewed（`feat/m1-t11-edit-session`，负责人 deepseek-v4p1-flash-1017；Q-T11-1..5 已确认；自动化检查通过，仪器测试待真机）
+  - 任务单 `T-0011-edit-session.md` - Reviewed
+  - 分支 `feat/m1-t11-edit-session`，负责人 deepseek-v4p1-flash-1017
   - 范围：通过 `rcode-ffi` 暴露 open / edit / 批量取行 / 当前版本号（undo / redo 已由 T-0008 导出，本任务复用并按需重组签名）。`open` 内部调用 `clear_history()`，加载本身不得成为可撤销步骤。Kotlin 侧不缓存完整文本（architecture §3.1）。
   - 验收：Kotlin 仪器测试可完成“打开 → 插入 → 撤销 → 取行”；FFI 层不 panic（`catch_unwind` 或等价保证）。
 
 - [x] **T-0012 SAF 打开文件**（依赖 T-0009、T-0011、Q14）
-  - 任务单 `T-0012-saf-open.md` - Review（负责人 deepseek-v4p1-flash-1017，分支 `feat/m1-t12-saf-open`；JVM/构建/lint 通过，仪器测试与真机 SAF 用例待设备）
+  - 任务单 `T-0012-saf-open.md` - Reviewed
+  - 分支 `feat/m1-t12-saf-open`，负责人 deepseek-v4p1-flash-1017
   - 范围：Kotlin 通过 SAF 选择并读取 URI 字节，交给 Rust 解码；错误映射为 UI 状态。
   - 验收：选择文件后可进入编辑；读取失败有可见错误提示；不吞异常。
+  - 备注：仅通过手动安装apk 确认 SAF 可以打开并读取文件，`connectedDebugAndroidTest` 未跑
 
 ## 阻塞
 
