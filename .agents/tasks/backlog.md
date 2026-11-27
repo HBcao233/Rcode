@@ -42,30 +42,6 @@
 - [x] **Q-T8-4 撤销/重做 UI 接线归属**：
   - 本任务只做 Rust + FFI + Kotlin 桥接/输入层；`MainScreen` 的 Undo/Redo 按钮与快捷键由 T-0013 或新建 T-0028 在 A12 前接线（含按钮 enable 状态、撤销后 `updateSelection`、真机验证）。
 
-## Ready
-
-- [x] **T-0027 启动即编辑 untitled.txt（输入法可用）**
-  - 任务单 `T-0027-untitled-editor.md` - Reviewed
-
-- [x] **T-0007 文本缓冲区核心（rope 替换 M1.0 临时 String）** — Reviewed（`feat/m1-buffer-rope`；自动化检查通过，V9 真机回归与 V10 依赖审批待人类）
-  - 任务单 `T-0007-text-buffer.md` - Reviewed
-
-- [x] **T-0009 编码与换行检测（codec）**
-  - 任务单 `T-0009-codec.md` - Reviewed（`feat/m1-codec`）
-
-- [x] **T-0010 原子保存（失败原子性）**
-  - 任务单 `T-0010-atomic-save.md` - Reviewed（`feat/m1-atomic-save`）
-
-- [x] **T-0008 撤销/重做与操作合并**（依赖 T-0007，Q9、Q15）
-  - 任务单 `T-0008-undo-redo.md` - Reviewed（`feat/m1-t8-undo-redo`，负责人 deepseek-v4p1-flash-1017）
-  - 验收：A5 的 proptest 通过；500 ms 内连续插入合并为一步；换行断开合并。
-
-- [x] **T-0011 编辑会话 FFI**（依赖 T-0007、T-0008、T-0009）
-  - 任务单 `T-0011-edit-session.md` - Review（`feat/m1-t11-edit-session`，负责人 deepseek-v4p1-flash-1017；Q-T11-1..5 已确认；自动化检查通过，仪器测试待真机）
-  - 范围：通过 `rcode-ffi` 暴露 open / edit / 批量取行 / 当前版本号（undo / redo 已由 T-0008 导出，本任务复用并按需重组签名）。`open` 内部调用 `clear_history()`，加载本身不得成为可撤销步骤。Kotlin 侧不缓存完整文本（architecture §3.1）。
-  - 验收：Kotlin 仪器测试可完成“打开 → 插入 → 撤销 → 取行”；FFI 层不 panic（`catch_unwind` 或等价保证）。
-  - 相关 skill：uniffi-bridge、rust-core
-
 ## Backlog
 
 ### 文件读写
@@ -73,12 +49,13 @@
   - 范围：Kotlin 通过 SAF 选择并读取 URI 字节，交给 Rust 解码；错误映射为 UI 状态。
   - 验收：选择文件后可进入编辑；读取失败有可见错误提示；不吞异常。
 
-### 保存（端到端）
 - [ ] **T-0013 保存流程接入 UI**（依赖 T-0010、T-0012）
   - 验收：保存按钮与快捷路径可用；保存成功/失败有反馈；A6、A7 的仪器测试通过。
 
 ### 编辑器视图
+
 - [ ] **T-0014 Canvas 可见行渲染**（依赖 T-0011、T-0012）
+  - 任务单 `T-0014-canvas-line-rendering.md` - Ready
   - 范围：自定义 Canvas 只绘制可见行；行布局缓存按版本号失效；视口 + 预取一屏。
   - 验收：10 MB 文件可滚动；A1 首屏 < 500 ms 的初版测量结果已记录。
   - 相关 skill：editor-rendering、perf-benchmark
@@ -124,12 +101,44 @@
 
 ## 已完成
 
-- [x] **T-0001 初始化 Gradle 工程**：建立 `app` 模块，Compose 空白页，最低 API 24。（真机验收 2026-11-24）
-- [x] **T-0002 初始化 Rust workspace**：建立 `core/` 与 `rcode-ffi` 空 crate，`cargo test` 通过。（真机验收 2026-11-24）
-- [x] **T-0003 cargo-ndk 集成**：Gradle 任务生成 `jniLibs`。依赖 T-0001、T-0002。（真机验收 2026-11-24）
-- [x] **T-0004 UniFFI 端到端 ping**：Kotlin 调用 Rust 的 `ping()` 并显示在界面。依赖 T-0003。（真机验收 2026-11-24）
-- [x] **T-0005 CI 流水线**：GitHub Actions 运行 fmt、clippy、test、assembleDebug。依赖 T-0004。（真机验收 2026-11-24）
-- [x] **T-0006 基准与日志基础**：接入 `tracing` 到 logcat，建立 Criterion 空基准。（真机验收 2026-11-24）
+- [x] **T-0001 初始化 Gradle 工程**：
+  - 建立 `app` 模块，Compose 空白页，最低 API 24。（真机验收 2026-11-24）
+
+- [x] **T-0002 初始化 Rust workspace**：
+  - 建立 `core/` 与 `rcode-ffi` 空 crate，`cargo test` 通过。（真机验收 2026-11-24）
+
+- [x] **T-0003 cargo-ndk 集成**：
+  - Gradle 任务生成 `jniLibs`。依赖 T-0001、T-0002。（真机验收 2026-11-24）
+
+- [x] **T-0004 UniFFI 端到端 ping**：
+  - Kotlin 调用 Rust 的 `ping()` 并显示在界面。依赖 T-0003。（真机验收 2026-11-24）
+
+- [x] **T-0005 CI 流水线**：
+  - GitHub Actions 运行 fmt、clippy、test、assembleDebug。依赖 T-0004。（真机验收 2026-11-24）
+
+- [x] **T-0006 基准与日志基础**：
+  - 接入 `tracing` 到 logcat，建立 Criterion 空基准。（真机验收 2026-11-24）
+
+- [x] **T-0027 启动即编辑 untitled.txt（输入法可用）**
+  - 任务单 `T-0027-untitled-editor.md` - Reviewed
+
+- [x] **T-0007 文本缓冲区核心（rope 替换 M1.0 临时 String）** — Reviewed（`feat/m1-buffer-rope`；自动化检查通过，V9 真机回归与 V10 依赖审批待人类）
+  - 任务单 `T-0007-text-buffer.md` - Reviewed
+
+- [x] **T-0009 编码与换行检测（codec）**
+  - 任务单 `T-0009-codec.md` - Reviewed（`feat/m1-codec`）
+
+- [x] **T-0010 原子保存（失败原子性）**
+  - 任务单 `T-0010-atomic-save.md` - Reviewed（`feat/m1-atomic-save`）
+
+- [x] **T-0008 撤销/重做与操作合并**（依赖 T-0007，Q9、Q15）
+  - 任务单 `T-0008-undo-redo.md` - Reviewed（`feat/m1-t8-undo-redo`）
+  - 验收：A5 的 proptest 通过；500 ms 内连续插入合并为一步；换行断开合并。
+
+- [x] **T-0011 编辑会话 FFI**（依赖 T-0007、T-0008、T-0009）
+  - 任务单 `T-0011-edit-session.md` - Reviewed（`feat/m1-t11-edit-session`，负责人 deepseek-v4p1-flash-1017；Q-T11-1..5 已确认；自动化检查通过，仪器测试待真机）
+  - 范围：通过 `rcode-ffi` 暴露 open / edit / 批量取行 / 当前版本号（undo / redo 已由 T-0008 导出，本任务复用并按需重组签名）。`open` 内部调用 `clear_history()`，加载本身不得成为可撤销步骤。Kotlin 侧不缓存完整文本（architecture §3.1）。
+  - 验收：Kotlin 仪器测试可完成“打开 → 插入 → 撤销 → 取行”；FFI 层不 panic（`catch_unwind` 或等价保证）。
 
 ## 阻塞
 
