@@ -3,7 +3,7 @@
 - **ID**：T-0015
 - **里程碑**：M1
 - **类型**：feat
-- **状态**：Reviewed by HBcao
+- **状态**：Reviewed by HBcao (2026-11-28 14:13)
 - **负责人**：deepseek-v4p1-flash-1017（2026-11-28 12:25 领取）
 - **分支**：`feat/m1-t15-cursor-touch`
 - **涉及模块**：editor（`app/src/main/kotlin/com/hbcao/rcode/editor/`）；若最终选择新增 FFI，再涉及 ffi
@@ -148,7 +148,7 @@ T-0014 完成后，`EditorView` 能只绘制可见行，并且有行布局缓存
 
 ## 交接记录
 
-- 日期：2026-11-28
+- 日期：2026-11-28 14:10
 - 分支与提交：`feat/m1-t15-cursor-touch`（从 `docs/t15-cursor-touch` 的 `147fa58` 切出）；实现提交见 `git log`。
 - 已完成：
   - 纯逻辑：`EditorScrollGeometry`（横纵边界、`scrollY→首行`、滚到可见、点击 y→行、布局窗口分档）、`LaidOutLine.textIndexForX`（中点规则、tab、代理对、截断）、`EditorHitTest`（UTF-16 索引 → UTF-8 偏移）。
@@ -171,3 +171,6 @@ T-0014 完成后，`EditorView` 能只绘制可见行，并且有行布局缓存
   - `./gradlew :app:lintDebug :app:assembleDebug --offline` → **通过**。
   - `adb devices` → 无设备。
 - 下一步建议：连接真机后先跑 `./gradlew :app:connectedDebugAndroidTest`，再按验收清单手动过 S1–S4、C6、C7（记录机型/Android 版本/输入法）；重点看横向拖动时 512 px 分档重排是否掉帧（留给 T-0025 量化）。
+
+- 日期 2026-11-28 14:13
+- 手动安装 debug apk 检验无误, `./gradlew :app:connectedDebugAndroidTest` 仍未运行
