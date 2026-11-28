@@ -175,10 +175,7 @@ fun MainScreen(viewModel: MainViewModel) {
             TopAppBar(
                 title = {
                     Column {
-                        Text(
-                            text = documentTitle(documentState, dirty),
-                            style = MaterialTheme.typography.titleMedium,
-                        )
+                        documentTitle(documentState, dirty)
                         documentSubtitle(
                             openRequest = openRequest,
                             saveRequest = saveRequest,
@@ -365,13 +362,33 @@ private fun OpenRequestDialogs(
 private fun documentTitle(
     documentState: DocumentUiState,
     dirty: Boolean,
-): String {
+) {
     val name =
         when (documentState) {
             DocumentUiState.Untitled -> stringResource(R.string.editor_title_untitled)
             is DocumentUiState.Opened -> documentState.fileName
         }
-    return if (dirty) stringResource(R.string.editor_title_modified, name) else name
+    if (dirty) {
+        Row {
+            Text(
+                text = stringResource(R.string.editor_title_modified_prefix),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = name,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    } else {
+        Text(
+            text = name,
+            style = MaterialTheme.typography.titleMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
 }
 
 @Composable

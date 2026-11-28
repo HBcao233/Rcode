@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">Rcode</string>
     <string name="editor_title_untitled">untitled.txt</string>
-    <string name="editor_title_modified">%1$s*</string>
+    <string name="editor_title_modified_prefix">*\u0020</string>
     <string name="editor_core_error">核心错误：%1$s</string>
     <string name="editor_reading">正在打开…</string>
     <string name="editor_read_only_prefix">只读 \u00b7\u0020</string>

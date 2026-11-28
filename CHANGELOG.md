@@ -285,3 +285,4 @@ All notable changes are documented here. Format follows Keep a Changelog.
   also implements `OnDoubleTapListener`, so the quick second touch was consumed as a
   double tap and ACTION_MOVE went to `onDoubleTapEvent` instead of `onScroll`. The
   double-tap listener is now cleared (T-0016 can install its own for word selection).
+- Fixed the issue of the title wrapping.
