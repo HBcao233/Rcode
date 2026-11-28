@@ -1,6 +1,7 @@
 package com.hbcao.rcode.editor
 
 import android.graphics.Paint
+import kotlin.math.abs
 
 /**
  * Font metrics that make two line layouts incompatible (T-0014, `editor-rendering` skill).
@@ -92,6 +93,40 @@ internal class LaidOutLine(
         return xOffsets[displayIndex.coerceIn(0, xOffsets.lastIndex)]
     }
 
+    /**
+     * UTF-16 index in [text] nearest to [x] (px from the line start; T-0015).
+     *
+     * Only caret boundaries are candidates: never an index inside a surrogate pair and
+     * never a position inside an expanded tab. Ties prefer the earlier index, matching
+     * the midpoint rule used by tap-to-caret. For a [truncated] line only the measured
+     * prefix is considered, so callers that need the rest must lay the line out with a
+     * wider window first (Q-T15-4).
+     */
+    fun textIndexForX(x: Float): Int {
+        val measuredUnits = xOffsets.size - 1
+        if (measuredUnits <= 0 || text.isEmpty()) return 0
+        var displayIndex = 0
+        var textIndex = 0
+        var bestIndex = 0
+        var bestDistance = Float.MAX_VALUE
+        while (true) {
+            val boundaryX = xOffsets[displayIndex.coerceIn(0, xOffsets.lastIndex)]
+            val distance = abs(boundaryX - x)
+            if (distance < bestDistance) {
+                bestDistance = distance
+                bestIndex = textIndex
+            }
+            if (textIndex >= text.length) break
+            val codePoint = text.codePointAt(textIndex)
+            val units = Character.charCount(codePoint)
+            val displayStep = if (codePoint == TAB_CODE_POINT) TAB_SIZE else units
+            if (displayIndex + displayStep > measuredUnits) break
+            displayIndex += displayStep
+            textIndex += units
+        }
+        return bestIndex
+    }
+
     private fun displayIndexFor(textIndex: Int): Int {
         var display = 0
         var index = 0
@@ -107,6 +142,9 @@ internal class LaidOutLine(
     companion object {
         /** Tab expansion width in spaces (Q-T14-3); no settings in M1. */
         const val TAB_SIZE = 4
+
+        /** `\t` as a code point, compared per code point during hit testing. */
+        private const val TAB_CODE_POINT = '\t'.code
 
         /** Drawing replacement of one tab. */
         const val TAB_SPACES = "    "
@@ -281,8 +319,10 @@ internal class LineLayoutBuilder(
  * document versions — a miss lays the line out again — and the map evicts the least
  * recently used entry past [capacity] (`editor-rendering` Q-T14-1).
  *
- * `maxWidthPx` is **not** part of the key: the width of the editor is fixed between size
- * changes, and `EditorView` drops the cache in `onSizeChanged`.
+ * `maxWidthPx` is **not** part of the key: the editor width is fixed between size
+ * changes, and the horizontal layout window only grows in 512 px buckets while the user
+ * scrolls right (T-0015). `EditorView` drops the whole cache when that window bucket or
+ * the view width changes, so an entry can never be reused with a narrower window.
  *
  * @property capacity maximum number of cached lines; `max(3 × visible rows, [MIN_ENTRIES])`
  *   in production, so one screen plus both prefetch screens survive a scroll. It only

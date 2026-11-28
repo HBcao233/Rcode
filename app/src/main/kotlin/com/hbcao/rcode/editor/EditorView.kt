@@ -8,21 +8,29 @@ import android.graphics.Typeface
 import android.text.InputType
 import android.util.Log
 import android.util.TypedValue
+import android.view.GestureDetector
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
+import android.widget.OverScroller
 import com.hbcao.rcode.ui.theme.EditorColors
+import kotlin.math.roundToInt
 
 /**
- * Custom text editor view for M1.0.
+ * Custom text editor view for M1.
  *
  * Text lives in the Rust [EditorSessionApi]; this view only caches the visible lines
  * and the caret geometry for the current document version (see ADR-0002). Drawing is
  * pure Canvas work over that cache, so `onDraw` performs no FFI calls and allocates
  * nothing per frame.
+ *
+ * Since T-0015 the viewport is pixel-based: [scrollX] / [scrollY] are the content
+ * offsets, single-finger drags move them, flings animate them through an
+ * [OverScroller], and a tap moves the caret through `moveCursor`. Rust remains the
+ * owner of the caret position; this view only asks for it.
  */
 class EditorView(
     context: Context,
@@ -65,14 +73,33 @@ class EditorView(
     /** Laid-out lines for the current document/version/font; see [EditorLineLayoutCache]. */
     private var layoutCache = EditorLineLayoutCache(layoutBuilder, EditorLineLayoutCache.capacityFor(1))
 
-    /** First line currently drawn at the top of the viewport. */
-    private var firstLine: Int = 0
+    /** Pixel offset of the viewport inside the content; `0` is the first line/column. */
+    private var scrollX: Float = 0f
+    private var scrollY: Float = 0f
+
+    /** Total lines in the last viewport snapshot; bounds the vertical scroll. */
+    private var lineCount: Int = 1
+
+    /** Widest measured line for the current document state (T-0015 Q-T15-2). */
+    private var maxLineWidth: Float = 0f
+
+    /** Layout window (px) used by [laidOutLines]; a change invalidates every layout. */
+    private var layoutWindowPx: Float = 0f
 
     /** Number of fully visible rows; the prefetch window is one screen on each side. */
     private var visibleRows: Int = 1
 
     /** Line index of `laidOutLines.first()`; lines before it are prefetch, not drawn. */
     private var layoutFirstLine: Int = 0
+
+    /** Lines returned by the last `viewport` call, kept to re-layout without FFI. */
+    private var laidOutSlices: List<EditorLineSlice> = emptyList()
+
+    /** Version of [laidOutLines]; a change resets the accumulated [maxLineWidth]. */
+    private var laidOutVersion: Long = -1
+
+    /** Last viewport snapshot; source of the caret and composing geometry. */
+    private var viewportSnapshot: EditorViewportSnapshot? = null
 
     /** Document shown by this view; a change resets the viewport and drops layouts (T-0012). */
     private var documentId: Long = 0
@@ -83,6 +110,54 @@ class EditorView(
     private var laidOutLines: List<LaidOutLine> = emptyList()
     private var caretRect: RectF? = null
     private var composingUnderlines: List<ComposingUnderline> = emptyList()
+
+    private val scroller = OverScroller(context)
+
+    private val gestureDetector =
+        GestureDetector(
+            context,
+            object : GestureDetector.SimpleOnGestureListener() {
+                override fun onDown(e: MotionEvent): Boolean = true
+
+                override fun onSingleTapUp(e: MotionEvent): Boolean {
+                    performClick()
+                    moveCaretTo(e.x, e.y)
+                    return true
+                }
+
+                override fun onScroll(
+                    e1: MotionEvent?,
+                    e2: MotionEvent,
+                    distanceX: Float,
+                    distanceY: Float,
+                ): Boolean {
+                    // Content follows the finger: swiping up shows the lines below.
+                    scrollContentBy(distanceX, distanceY)
+                    return true
+                }
+
+                override fun onFling(
+                    e1: MotionEvent?,
+                    e2: MotionEvent,
+                    velocityX: Float,
+                    velocityY: Float,
+                ): Boolean {
+                    if (e1 == null) return false
+                    scroller.fling(
+                        scrollX.roundToInt(),
+                        scrollY.roundToInt(),
+                        -velocityX.roundToInt(),
+                        -velocityY.roundToInt(),
+                        0,
+                        maxScrollX().roundToInt(),
+                        0,
+                        maxScrollY().roundToInt(),
+                    )
+                    postInvalidateOnAnimation()
+                    return true
+                }
+            },
+        )
 
     /** Everything a line layout depends on besides the text (cache key part, T-0014). */
     private val fontConfig: FontConfig
@@ -260,23 +335,33 @@ class EditorView(
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            // Touching the editor stops an ongoing fling (S3).
+            scroller.forceFinished(true)
             if (!isFocused) {
                 requestFocus()
             }
             if (inputHandler.isComposing) {
+                // Keep the visible composing text, but do not scroll back to the caret:
+                // the user may be starting a drag (C6).
                 inputHandler.finishComposingText()
-                refreshViewport()
+                refreshViewport(followCaret = false)
             }
             showKeyboard()
-        } else if (event.actionMasked == MotionEvent.ACTION_UP) {
-            performClick()
         }
+        gestureDetector.onTouchEvent(event)
         return true
     }
 
     override fun performClick(): Boolean {
         super.performClick()
         return true
+    }
+
+    /** Wraps the inertial scroll started by [GestureDetector.SimpleOnGestureListener.onFling]. */
+    override fun computeScroll() {
+        if (!scroller.computeScrollOffset()) return
+        scrollContentTo(scroller.currX.toFloat(), scroller.currY.toFloat())
+        if (!scroller.isFinished) postInvalidateOnAnimation()
     }
 
     override fun onFocusChanged(
@@ -309,7 +394,175 @@ class EditorView(
 
     // endregion
 
-    // region rendering
+    // region touch scrolling (T-0015)
+
+    /** Moves the viewport by [dx] / [dy] px, clamped to the scrollable range. */
+    private fun scrollContentBy(
+        dx: Float,
+        dy: Float,
+    ) {
+        scrollContentTo(scrollX + dx, scrollY + dy)
+    }
+
+    private fun scrollContentTo(
+        x: Float,
+        y: Float,
+    ) {
+        if (width <= 0 || height <= 0) return
+        val clampedX = x.coerceIn(0f, maxScrollX())
+        val clampedY = y.coerceIn(0f, maxScrollY())
+        if (clampedX == scrollX && clampedY == scrollY) return
+        scrollX = clampedX
+        scrollY = clampedY
+        relayoutIfWindowChanged()
+        ensureVisibleLinesLaidOut()
+        invalidate()
+    }
+
+    private fun maxScrollX(): Float =
+        EditorScrollGeometry.maxScrollX(
+            maxLineWidth = maxLineWidth,
+            caretWidth = caretWidth,
+            contentWidth = width - paddingLeft - paddingRight,
+        )
+
+    private fun maxScrollY(): Float =
+        EditorScrollGeometry.maxScrollY(
+            lineCount = lineCount,
+            lineHeight = lineHeight,
+            paddingTop = paddingTop,
+            paddingBottom = paddingBottom,
+            viewHeight = height,
+        )
+
+    private fun contentHeight(): Float = (height - paddingTop - paddingBottom).toFloat()
+
+    /**
+     * Re-lays out the loaded lines when [scrollX] crossed a layout-window bucket.
+     *
+     * The cache key does not include the window (T-0014), so a different window must
+     * drop the old geometry; the slices are still in memory, so no FFI call is needed.
+     */
+    private fun relayoutIfWindowChanged() {
+        if (computeLayoutWindowPx() == layoutWindowPx) return
+        // `layoutAllLines` notices the new window, drops the old geometry and re-lays
+        // out the slices it already has, so no FFI call is needed here.
+        layoutAllLines()
+        updateCaretGeometry()
+    }
+
+    /** Fetches the three-screen window only when the visible range left it. */
+    private fun ensureVisibleLinesLaidOut() {
+        if (laidOutSlices.isEmpty()) {
+            loadViewport(visibleRows, firstLine)
+            return
+        }
+        val first = firstLine
+        val last = first + visibleRows
+        val laidOutLast = layoutFirstLine + laidOutSlices.size - 1
+        if (first < layoutFirstLine || last > laidOutLast) {
+            loadViewport(visibleRows, first)
+        }
+    }
+
+    /** Clamps both offsets after the document, the view size or the font changed. */
+    private fun clampScrollOffsets() {
+        val clampedX = scrollX.coerceIn(0f, maxScrollX())
+        val clampedY = scrollY.coerceIn(0f, maxScrollY())
+        if (clampedX == scrollX && clampedY == scrollY) return
+        scrollX = clampedX
+        scrollY = clampedY
+        relayoutIfWindowChanged()
+    }
+
+    /**
+     * Scrolls horizontally just enough to show the caret.
+     *
+     * The vertical part is handled by [EditorScrollGeometry.scrollYToRevealRow].
+     */
+    private fun revealCaretHorizontally() {
+        val caret = caretRect ?: return
+        val caretX = caret.left + caretInset
+        val leftLimit = paddingLeft.toFloat()
+        val rightLimit = width - paddingRight - caretWidth
+        val screenX = caretX - scrollX
+        when {
+            screenX < leftLimit -> scrollX = caretX - leftLimit
+            screenX > rightLimit -> scrollX = caretX - rightLimit
+        }
+    }
+
+    private fun computeLayoutWindowPx(): Float =
+        EditorScrollGeometry.layoutWindowPx(
+            contentWidth = width - paddingLeft - paddingRight,
+            scrollX = scrollX,
+            lineHeight = lineHeight,
+            bucketPx = SCROLL_WINDOW_BUCKET_PX,
+            maxWindowPx = MAX_LINE_LAYOUT_WINDOW_PX,
+        )
+
+    // endregion
+
+    // region tap-to-caret (T-0015)
+
+    /**
+     * Places the caret at a tap: line from the y coordinate, nearest character boundary
+     * from the x coordinate, then [EditorSessionApi.moveCursor] (Rust snaps and clamps).
+     */
+    private fun moveCaretTo(
+        x: Float,
+        y: Float,
+    ) {
+        if (width <= 0 || height <= 0) return
+        val contentY = y + scrollY - paddingTop
+        if (contentY > lineCount * lineHeight) {
+            // Blank space below the last line: the end of the document (C3).
+            session.moveCursor(Int.MAX_VALUE)
+            notifySelectionChanged()
+            refreshViewport()
+            return
+        }
+        val lineIndex = EditorScrollGeometry.lineForContentY(contentY, lineHeight, lineCount)
+        val slice = sliceForLine(lineIndex) ?: return
+        val lineX = x + scrollX - paddingLeft
+        val layout = layoutForTap(slice, lineX)
+        session.moveCursor(EditorHitTest.byteOffsetFor(layout, lineX))
+        notifySelectionChanged()
+        refreshViewport()
+    }
+
+    /** Slice of [lineIndex] from the loaded window, or a one-line FFI read on a miss. */
+    private fun sliceForLine(lineIndex: Int): EditorLineSlice? {
+        laidOutSlices.getOrNull(lineIndex - layoutFirstLine)?.let { return it }
+        return session.viewport(lineIndex, 1).lines.firstOrNull()
+    }
+
+    /**
+     * Layout used for a tap. A line that was truncated by the scroll window is measured
+     * once with a window that reaches the tap (Q-T15-4); the result is not cached.
+     */
+    private fun layoutForTap(
+        slice: EditorLineSlice,
+        lineX: Float,
+    ): LaidOutLine {
+        val cached = layoutAt(slice.index)
+        if (cached != null && (!cached.truncated || lineX <= cached.width)) return cached
+        val window =
+            maxOf(layoutWindowPx, lineX + lineHeight)
+                .coerceIn(lineHeight.coerceAtLeast(1f), MAX_LINE_LAYOUT_WINDOW_PX)
+        return layoutBuilder.layout(slice, window)
+    }
+
+    /** Tells the IME where the caret is after a tap (C7). */
+    private fun notifySelectionChanged() {
+        val caret = session.cursorUtf16Offset()
+        (context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
+            ?.updateSelection(this, caret, caret, -1, -1)
+    }
+
+    // endregion
+
+    // region viewport and rendering
 
     override fun onSizeChanged(
         width: Int,
@@ -326,6 +579,8 @@ class EditorView(
         visibleRows = rows
         if (width != oldWidth) {
             layoutCache = EditorLineLayoutCache(layoutBuilder, EditorLineLayoutCache.capacityFor(rows))
+            layoutWindowPx = 0f
+            maxLineWidth = 0f
         } else {
             ensureCacheCapacity(rows)
         }
@@ -334,52 +589,108 @@ class EditorView(
 
     /**
      * Reloads the visible lines from the Rust session. Called after edits and size
-     * changes, never from `onDraw`.
+     * changes, never from `onDraw` or a scroll frame that stays inside the loaded window.
      *
      * One `viewport` call fetches the visible rows plus one prefetch screen above and
      * below (Q-T14-2); each row is laid out once per document version and font (T-0014).
      */
     fun refreshViewport() {
+        refreshViewport(followCaret = true)
+    }
+
+    private fun refreshViewport(followCaret: Boolean) {
         if (width <= 0 || height <= 0) return
-        val contentHeight = height - paddingTop - paddingBottom
-        if (contentHeight <= 0) return
+        if (contentHeight() <= 0f) return
+        val rows = updateVisibleRows()
+
+        val anchor = if (followCaret) session.cursor().line else firstLine
+        loadViewport(rows, anchor)
+
+        if (followCaret) {
+            // S4: after an edit, a caret move or a size change the caret is scrolled into
+            // view with the smallest possible movement.
+            scrollY =
+                EditorScrollGeometry.scrollYToRevealRow(
+                    row = anchor,
+                    lineHeight = lineHeight,
+                    scrollY = scrollY,
+                    contentHeight = contentHeight(),
+                )
+            clampScrollOffsets()
+            revealCaretHorizontally()
+            clampScrollOffsets()
+        }
+        invalidate()
+    }
+
+    private fun updateVisibleRows(): Int {
         val rows = visibleRowsFor(height)
         ensureCacheCapacity(rows)
         visibleRows = rows
+        return rows
+    }
 
-        val cursor = session.cursor()
-        if (cursor.line < firstLine) {
-            firstLine = cursor.line
-        } else if (cursor.line >= firstLine + rows) {
-            firstLine = cursor.line - rows + 1
-        }
-        firstLine = firstLine.coerceAtLeast(0)
-
-        val requestFirst = (firstLine - rows).coerceAtLeast(0)
+    /**
+     * Fetches [rows] lines around [anchorLine] (one more screen on each side) and lays
+     * them out. Updates [lineCount] and the caret/composing geometry for the snapshot.
+     */
+    private fun loadViewport(
+        rows: Int,
+        anchorLine: Int,
+    ) {
+        val requestFirst = (anchorLine - rows).coerceAtLeast(0)
         val viewport = session.viewport(requestFirst, minOf(rows * SCREENS_LAID_OUT, MAX_VIEWPORT_LINES))
-        firstLine = firstLine.coerceAtMost((viewport.lineCount - 1).coerceAtLeast(0))
+        viewportSnapshot = viewport
+        laidOutSlices = viewport.lines
+        layoutFirstLine = viewport.firstLine
+        lineCount = viewport.lineCount
 
         if (viewport.version != reportedVersion) {
             reportedVersion = viewport.version
             onVersionChanged(viewport.version)
         }
 
-        // `maxWidthPx` bounds the layout work of a very long line (V6, Q-T14-5); the
-        // extra line height keeps the character under the right edge measurable.
-        val maxWidthPx = (width - paddingLeft - paddingRight).toFloat() + lineHeight
-        val font = fontConfig
-        laidOutLines =
-            viewport.lines.map { line -> layoutCache.layoutFor(documentId, viewport.version, font, line, maxWidthPx) }
-        layoutFirstLine = viewport.firstLine
-        caretRect = caretRect(viewport)
-        composingUnderlines = composingUnderlines(viewport)
-        invalidate()
+        layoutAllLines()
+        updateCaretGeometry()
+        clampScrollOffsets()
 
         if (firstViewportStartedNanos != 0L) {
             val elapsedMillis = (System.nanoTime() - firstViewportStartedNanos) / NANOS_PER_MILLI
             Log.i(LOG_TAG, "first viewport after open: ${elapsedMillis}ms")
             firstViewportStartedNanos = 0
         }
+    }
+
+    /**
+     * Lays out [laidOutSlices] with the current [layoutWindowPx] and keeps
+     * [maxLineWidth] monotonic for the current version (Q-T15-2).
+     */
+    private fun layoutAllLines() {
+        val snapshot = viewportSnapshot ?: return
+        val window = computeLayoutWindowPx()
+        if (window != layoutWindowPx) {
+            layoutWindowPx = window
+            layoutCache.invalidateAll()
+        }
+        if (laidOutVersion != snapshot.version) {
+            laidOutVersion = snapshot.version
+            maxLineWidth = 0f
+        }
+        var widest = maxLineWidth
+        val layouts = ArrayList<LaidOutLine>(laidOutSlices.size)
+        for (slice in laidOutSlices) {
+            val line = layoutCache.layoutFor(documentId, snapshot.version, fontConfig, slice, window)
+            if (line.width > widest) widest = line.width
+            layouts += line
+        }
+        maxLineWidth = widest
+        laidOutLines = layouts
+    }
+
+    private fun updateCaretGeometry() {
+        val snapshot = viewportSnapshot ?: return
+        caretRect = caretRect(snapshot)
+        composingUnderlines = composingUnderlines(snapshot)
     }
 
     private fun visibleRowsFor(height: Int): Int = ((height - paddingTop - paddingBottom).toFloat() / lineHeight).toInt().coerceAtLeast(1)
@@ -392,19 +703,52 @@ class EditorView(
     val firstVisibleLine: Int
         get() = firstLine
 
+    /** Image-space x offset used by tests and the accessibility scroll description. */
+    internal val scrollXPixels: Float
+        get() = scrollX
+
+    /** Image-space y offset used by tests. */
+    internal val scrollYPixels: Float
+        get() = scrollY
+
     /**
      * Test hook (T-0014): drawable text of [lineIndex] when it is currently drawn.
      *
-     * Returns `null` for lines outside the visible rows, including prefetch lines above
-     * or below the viewport, so tests can assert both the drawn content and the range.
+     * Returns `null` for lines outside the drawn rows (including prefetch lines above or
+     * below the viewport), so tests can assert both the drawn content and the range.
      */
     internal fun visibleTextAt(lineIndex: Int): String? {
-        if (lineIndex < firstLine || lineIndex >= firstLine + visibleRows) return null
+        if (lineIndex < firstLine || lineIndex >= firstLine + visibleRows + 1) return null
         return layoutAt(lineIndex)?.displayText
     }
 
     /** Test hook (T-0014): number of cached line layouts. */
     internal fun cachedLayoutCount(): Int = layoutCache.size
+
+    /** Test hook (T-0015): tap without synthesizing a MotionEvent. */
+    internal fun moveCaretForTest(
+        x: Float,
+        y: Float,
+    ) {
+        moveCaretTo(x, y)
+    }
+
+    /** Test hook (T-0015): scroll without synthesizing a MotionEvent. */
+    internal fun scrollContentForTest(
+        dx: Float,
+        dy: Float,
+    ) {
+        scrollContentBy(dx, dy)
+    }
+
+    /** Test hook (T-0015): maximum horizontal offset. */
+    internal fun maxScrollXPixels(): Float = maxScrollX()
+
+    /** Test hook (T-0015): maximum vertical offset. */
+    internal fun maxScrollYPixels(): Float = maxScrollY()
+
+    /** Test hook (T-0015): baseline-to-baseline distance in px. */
+    internal fun lineHeightPx(): Float = lineHeight
 
     /**
      * Resets rendering and the IME after the session replaced its document (T-0012).
@@ -414,8 +758,18 @@ class EditorView(
      */
     fun onDocumentOpened() {
         firstViewportStartedNanos = System.nanoTime()
-        finishComposingText()
-        firstLine = 0
+        inputHandler.finishComposingText()
+        scrollX = 0f
+        scrollY = 0f
+        lineCount = 1
+        maxLineWidth = 0f
+        layoutWindowPx = 0f
+        laidOutVersion = -1
+        viewportSnapshot = null
+        laidOutSlices = emptyList()
+        laidOutLines = emptyList()
+        layoutFirstLine = 0
+        layoutCache.invalidateAll()
         refreshViewport()
         (context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)?.restartInput(this)
     }
@@ -430,7 +784,6 @@ class EditorView(
     fun showDocument(documentId: Long) {
         if (this.documentId == documentId) return
         this.documentId = documentId
-        layoutCache.invalidateAll()
         onDocumentOpened()
     }
 
@@ -442,8 +795,13 @@ class EditorView(
      */
     fun invalidateAll() {
         layoutCache.invalidateAll()
+        layoutWindowPx = 0f
+        maxLineWidth = 0f
         refreshViewport()
     }
+
+    private val firstLine: Int
+        get() = EditorScrollGeometry.firstLineFor(scrollY, lineHeight, lineCount)
 
     private fun caretRect(viewport: EditorViewportSnapshot): RectF? {
         val line = layoutAt(viewport.cursor.line) ?: return null
@@ -461,7 +819,8 @@ class EditorView(
     /** Cached layout of [lineIndex], or `null` when it is outside the prefetch window. */
     private fun layoutAt(lineIndex: Int): LaidOutLine? = laidOutLines.getOrNull(lineIndex - layoutFirstLine)
 
-    private fun lineTop(lineIndex: Int): Float = paddingTop + (lineIndex - firstLine) * lineHeight
+    /** Top edge of [lineIndex] in content coordinates (before the scroll translation). */
+    private fun lineTop(lineIndex: Int): Float = paddingTop + lineIndex * lineHeight
 
     private fun composingUnderlines(viewport: EditorViewportSnapshot): List<ComposingUnderline> {
         val start = inputHandler.composingStartByte
@@ -495,9 +854,12 @@ class EditorView(
         super.onDraw(canvas)
         canvas.drawColor(colors.background)
         val baselineOffset = -textPaint.fontMetrics.ascent
+        // Content coordinates are translated once per frame; nothing is allocated.
+        canvas.save()
+        canvas.translate(-scrollX, -scrollY)
         // Only fully visible rows are drawn; prefetch lines are laid out, not painted.
         val start = maxOf(firstLine, layoutFirstLine)
-        val endExclusive = minOf(firstLine + visibleRows, layoutFirstLine + laidOutLines.size)
+        val endExclusive = minOf(firstLine + visibleRows + 1, layoutFirstLine + laidOutLines.size)
         for (lineIndex in start until endExclusive) {
             val line = laidOutLines[lineIndex - layoutFirstLine]
             if (line.displayText.isEmpty()) continue
@@ -507,6 +869,7 @@ class EditorView(
             canvas.drawLine(underline.startX, underline.y, underline.endX, underline.y, composingPaint)
         }
         caretRect?.let { canvas.drawRect(it, caretPaint) }
+        canvas.restore()
     }
 
     private class ComposingUnderline(
@@ -532,5 +895,11 @@ class EditorView(
 
         /** Mirrors the Rust `viewport` clamp (T-0011) so one call never asks for more. */
         const val MAX_VIEWPORT_LINES = 10_000
+
+        /** Q-T15-1: horizontal window grows in these steps while dragging. */
+        const val SCROLL_WINDOW_BUCKET_PX = 512f
+
+        /** Q-T15-1: a very long line is never measured past this window. */
+        const val MAX_LINE_LAYOUT_WINDOW_PX = 100_000f
     }
 }
