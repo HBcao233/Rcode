@@ -3,9 +3,9 @@
 - **ID**：T-0015
 - **里程碑**：M1
 - **类型**：feat
-- **状态**：Ready
-- **负责人**：（未领取）
-- **分支**：`feat/m1-t15-cursor-touch`（领取时创建）
+- **状态**：Review
+- **负责人**：deepseek-v4p1-flash-1017（2026-11-28 12:25 领取）
+- **分支**：`feat/m1-t15-cursor-touch`
 - **涉及模块**：editor（`app/src/main/kotlin/com/hbcao/rcode/editor/`）；若最终选择新增 FFI，再涉及 ffi
 - **相关 skill**：editor-rendering、kotlin-compose-ui、testing-qa；改动 FFI 时加 uniffi-bridge
 
@@ -133,15 +133,13 @@ T-0014 完成后，`EditorView` 能只绘制可见行，并且有行布局缓存
 
 ## 计划
 
-（实现 agent 填写，3–7 步。以下为建议切分，仅供参考。）
-
-1. 抽出纯 Kotlin 的 `EditorHitTester`（坐标 → 行 / 文本索引 / 字节偏移）与 `ScrollBounds`，先写 JVM 失败测试（S1、S2、C1–C4）。
-2. `LaidOutLine` 增加反向 x → 文本索引查询（含 tab 与中点规则），补 JVM 测试。
-3. `EditorView` 改为像素级 `scrollX` / `scrollY`，`firstLine` 派生；绘制与光标几何按偏移平移；加入“仅窗口外才重新取视口”的逻辑（S1、S2、S4）。
-4. 按 Q-T15-1 的结论调整长行布局窗口与缓存失效，同步更新 `architecture.md` §3.2 与缓存注释。
-5. 接入 `GestureDetector` + `VelocityTracker` + `OverScroller`：拖动、fling、按下打断、单击判定；用 `computeScroll` 推进惯性（S3、C5）。
-6. 单击回调中实现点击定位：结束组合 → 命中换算 → `moveCursor` → `updateSelection` → 只做必要刷新（C1–C7）。
-7. 真机验证 S1–S4、C1–C7 与回归项；跑 DoD 命令，更新任务单、`CHANGELOG.md`。
+1. 新增 `EditorScrollGeometry`（纯 Kotlin：横向/纵向边界、`scrollY` → 首行、把某行滚到可见、点击 y → 行）与 `EditorHitTest`（slice + 布局 → 字节偏移），先写 JVM 失败测试（S1、S2、C1–C4）。
+2. `LaidOutLine` 增加 `textIndexForX`（中点规则、tab 展开、截断行只量到已测前缀），补 JVM 测试。
+3. `EditorView` 改为像素级 `scrollX` / `scrollY`：`firstLine` 改为派生属性，绘制用 `canvas.translate(-scrollX, -scrollY)`，光标跟随改为“最小幅度滚动”；滚动时仅在可见范围越出已加载 3 屏时才调用 `viewport`（S1、S2、S4）。
+4. 长行布局窗口按 Q-T15-1 实现（512 px 分档、分档变化失效缓存、100k 上限），`maxLineWidth` 按 Q-T15-2 单调累积；同步更新 `architecture.md` §3.2 与 `EditorLineLayoutCache` 注释。
+5. 接入 `GestureDetector` + `OverScroller`：拖动跟手、fling、按下打断、单击判定；单击回调经 `moveCursor` → `updateSelection` → 刷新（S3、C1–C7）。
+6. `MainScreen` 的 MoreMenuButton：打开菜单前收起软键盘并清除编辑器焦点（Q-T15-3 的追加修复）。
+7. 跑 DoD（`ktlintCheck`、`testDebugUnitTest`、`lintDebug`、`assembleDebug`），补充仪器测试；真机用例 S1–S4、C1–C7 按能否连设备记录，更新 `CHANGELOG.md` 与交接记录。
 
 ## 阻塞
 
@@ -149,9 +147,20 @@ T-0014 完成后，`EditorView` 能只绘制可见行，并且有行布局缓存
 
 ## 交接记录
 
-- 日期：
-- 分支与提交：
+- 日期：2026-11-28
+- 分支与提交：`feat/m1-t15-cursor-touch`（从 `docs/t15-cursor-touch` 的 `147fa58` 切出）；实现提交见 `git log`。
 - 已完成：
-- 未完成：
+  - 纯逻辑：`EditorScrollGeometry`（横纵边界、`scrollY→首行`、滚到可见、点击 y→行、布局窗口分档）、`LaidOutLine.textIndexForX`（中点规则、tab、代理对、截断）、`EditorHitTest`（UTF-16 索引 → UTF-8 偏移）。
+  - `EditorView`：像素级 `scrollX` / `scrollY`，`firstLine` 派生；`canvas.translate` 绘制；`GestureDetector` + `OverScroller` 实现拖动、fling、按下打断、单击；单击 → 结束组合 → `moveCursor` → `InputMethodManager.updateSelection`；编辑/方向键/尺寸变化后最小幅度滚到光标可见；滚动仅在离开已加载三屏时调用 `viewport`。
+  - 长行横向滚动：512 px 分档窗口、100k 上限、分档变化失效缓存；`maxLineWidth` 单调累积；点击超出已测前缀时只对该行做一次性加宽布局。
+  - `MainScreen`：打开 More 菜单前 `clearFocus()` + 收起 IME（Q-T15-3 的追加修复）。
+  - 文档：`architecture.md` §3.2、`EditorLineLayoutCache` 注释、`CHANGELOG.md`。
+- 未完成（需人类补测）：
+  - 仪器测试 `EditorTouchInstrumentedTest` 与真机用例 S1–S4、C1–C7、回归项。当前环境 `adb devices` 为空（已确认）。
+  - 惯性滑动手感（fling 初始速度/衰减）只在代码层面设定，未在真机调参。
 - 测试结果：
-- 下一步建议：
+  - `./gradlew :app:testDebugUnitTest --offline` → **通过**（109 tests，含新增 `EditorScrollGeometryTest`、`LaidOutLineHitTest`、`EditorHitTestTest`）。
+  - `./gradlew :app:compileDebugAndroidTestKotlin :app:ktlintCheck --offline` → **通过**（新建 `EditorTouchInstrumentedTest` 可编译，未在设备上执行）。
+  - `./gradlew :app:lintDebug :app:assembleDebug --offline` → **通过**。
+  - `adb devices` → 无设备。
+- 下一步建议：连接真机后先跑 `./gradlew :app:connectedDebugAndroidTest`，再按验收清单手动过 S1–S4、C6、C7（记录机型/Android 版本/输入法）；重点看横向拖动时 512 px 分档重排是否掉帧（留给 T-0025 量化）。

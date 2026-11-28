@@ -238,3 +238,31 @@ All notable changes are documented here. Format follows Keep a Changelog.
   and check that opening another document drops the cached layouts.
 - Changed: the previous "one extra line" prefetch and the `RenderedLine` wrapper are
   gone; prefetch screens are laid out but never painted.
+
+### T-0015 (touch cursor and scrolling)
+- Added pixel-based `scrollX` / `scrollY` to `EditorView`: one-finger drags move the
+  viewport with the finger, flings decelerate through an `OverScroller` and stop at
+  the document bounds, and touching the screen interrupts a fling. `onDraw` translates
+  the canvas instead of recomputing a row origin, and `firstVisibleLine` is now derived
+  from `scrollY`.
+- Added tap-to-caret: a single tap moves the caret to the nearest character boundary
+  on the tapped line, including CJK, emoji (never inside a surrogate pair), tabs, the
+  right-hand blank area (line end), the left padding (line start) and the blank area
+  below the last line (document end). The position is requested through Rust
+  `moveCursor`, so the returned byte offset stays authoritative, and
+  `InputMethodManager.updateSelection` is called so the IME sees the new caret.
+- Added a horizontal layout window that grows with the scroll offset in 512 px buckets
+  (capped at 100 000 px): dragging right reveals the rest of a long line, and the line
+  layout cache is dropped when the window bucket changes, so no stale truncated
+  geometry is reused. The horizontal scroll range comes from the widest measured line
+  and never shrinks while the document version, font and view width stay the same.
+- Changed the caret-follow rule: edits, arrow keys and size changes scroll the caret
+  into view with the smallest movement; manual scrolling no longer snaps the viewport
+  back to the caret. Scrolling inside the loaded three-screen window calls no FFI.
+- Added JVM tests for the viewport arithmetic (`EditorScrollGeometryTest`), the tap
+  geometry (`LaidOutLineHitTest`, `EditorHitTestTest`) and instrumented tests for tap
+  placement, drag-without-caret-move, bound clamping, horizontal scroll and the
+  "no session call while scrolling inside the window" rule.
+- Changed the "more" menu: opening it now clears editor focus and hides the soft
+  keyboard first, so the dropdown is laid out in the full window height and every item
+  fits (Q-T15-3).
