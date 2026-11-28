@@ -19,13 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -60,7 +53,9 @@ import com.hbcao.rcode.R
 import com.hbcao.rcode.editor.EditorView
 import com.hbcao.rcode.editor.UnsupportedEncodingKind
 import com.hbcao.rcode.icons.Apps
+import com.hbcao.rcode.icons.Close
 import com.hbcao.rcode.icons.Code
+import com.hbcao.rcode.icons.Edit
 import com.hbcao.rcode.icons.ExitToApp
 import com.hbcao.rcode.icons.File
 import com.hbcao.rcode.icons.FileDownload
@@ -72,9 +67,13 @@ import com.hbcao.rcode.icons.KeyboardArrowLeft
 import com.hbcao.rcode.icons.KeyboardArrowRight
 import com.hbcao.rcode.icons.KeyboardArrowUp
 import com.hbcao.rcode.icons.KeyboardTab
+import com.hbcao.rcode.icons.Menu
 import com.hbcao.rcode.icons.MoreHoriz
+import com.hbcao.rcode.icons.MoreVert
 import com.hbcao.rcode.icons.Redo
 import com.hbcao.rcode.icons.Save
+import com.hbcao.rcode.icons.Search
+import com.hbcao.rcode.icons.Settings
 import com.hbcao.rcode.icons.Terminal2
 import com.hbcao.rcode.icons.Undo
 import com.hbcao.rcode.platform.document.SaveStage
@@ -182,7 +181,7 @@ fun MainScreen(viewModel: MainViewModel) {
                 navigationIcon = {
                     IconButton(onClick = { /* do something */ }) {
                         Icon(
-                            imageVector = Icons.Filled.Menu,
+                            imageVector = Menu,
                             contentDescription = "Sidebar",
                         )
                     }
@@ -190,7 +189,7 @@ fun MainScreen(viewModel: MainViewModel) {
                 actions = {
                     IconButton(onClick = {}) {
                         Icon(
-                            imageVector = Icons.Filled.Edit,
+                            imageVector = Edit,
                             contentDescription = "Edit",
                         )
                     }
@@ -494,7 +493,7 @@ private fun MoreMenuButton(
 
     IconButton(onClick = { showMenu = true }) {
         Icon(
-            imageVector = Icons.Filled.MoreVert,
+            imageVector = MoreVert,
             contentDescription = "更多选项",
         )
     }
@@ -541,7 +540,7 @@ private fun MoreMenuButton(
         DropdownMenuItem(
             text = { Text("关闭文件") },
             onClick = { showMenu = false },
-            trailingIcon = { Icon(Icons.Filled.Close, contentDescription = null) },
+            trailingIcon = { Icon(Close, contentDescription = null) },
         )
         DropdownMenuItem(
             text = { Text("最近打开") },
@@ -551,7 +550,7 @@ private fun MoreMenuButton(
         DropdownMenuItem(
             text = { Text("查找文件") },
             onClick = { showMenu = false },
-            trailingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+            trailingIcon = { Icon(Search, contentDescription = null) },
         )
         DropdownMenuItem(
             text = { Text("控制台") },
@@ -574,7 +573,7 @@ private fun MoreMenuButton(
         DropdownMenuItem(
             text = { Text("设置") },
             onClick = { showMenu = false },
-            trailingIcon = { Icon(Icons.Filled.Settings, contentDescription = null) },
+            trailingIcon = { Icon(Settings, contentDescription = null) },
         )
         DropdownMenuItem(
             text = { Text("帮助") },
@@ -660,7 +659,7 @@ private fun provideRow1Items(onSave: () -> Unit): List<ActionItem> =
             id = "row1_5",
             icon = {
                 Icon(
-                    Icons.Filled.Search,
+                    Search,
                     contentDescription = "Search",
                     modifier = Modifier.size(20.dp),
                 )
