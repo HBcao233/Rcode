@@ -38,11 +38,17 @@
 
 ### 编辑器视图
 
-- [ ] **T-0016 选区**（依赖 T-0015）
-  - 任务单 `T-0016-selection.md` - 待确认（Q-T16-1 选区状态归属、Q-T16-2 选词边界、Q-T16-3 光标形态）
+- [ ] **T-0016 选区核心（Rust + FFI）**（依赖 T-0015）
+  - 任务单 `T-0016-selection.md` - Ready（只做 Rust 与 FFI，不动 Kotlin UI；UI 拆到 T-0031）
+  - 范围：Rust 选区权威状态（anchor/focus，UTF-8 字节、归一化与字符边界吸附，选区变化不改版本）；`rcode-buffer` 选词边界；FFI `selection` / `set_selection` / `select_word_at` / `selected_text`，`EditorViewport` 带选区；光标相对编辑替换选区、显式范围编辑按传入范围执行。
+  - 验收：Rust 单测覆盖端点/选词/截断/编辑语义与版本不变；`app` 仍可编译且无 Kotlin 源码改动。
+  - 相关 skill：rust-core、uniffi-bridge、testing-qa
+- [ ] **T-0031 选区 UI（高亮、水滴手柄、上下文菜单）**（依赖 T-0016）
+  - 任务单 `T-0031-selection-ui.md` - Ready
   - 范围：长按选词、拖动选区；选词后在上方或下方显示 Copy, Cut, Paste 按钮（即 context菜单）。
-  - 定位光标时在竖线光标下方显示一个 类似 css border-radius: 50% 0 50% 50% 效果的 RoundedCornerShape 水滴形光标，颜色 #2196f3，并旋转45度使尖端朝上，拖动"水滴"可以移动光标
+  - 定位光标时在竖线光标下方显示一个 类似 css border-radius: 50% 0 50% 50% 效果的 RoundedCornerShape 水滴形光标，颜色取主题 primary，并旋转45度使尖端朝上，拖动"水滴"可以移动光标
   - 选词时在选区左右两端各显示一个"水滴" (一个 50% 0 50% 50%, 另一个 0 50% 50% 50%), 拖动可以改变选区范围
+  - 相关 skill：editor-rendering、kotlin-compose-ui、testing-qa
 - [ ] **T-0028 底部快捷按钮**
   - 范围：底部 action buttons 接线，updateSelection + enable 状态；底部快捷保存按钮，在dirty状态下显示圆点。
 - [ ] **T-0029 键盘输入**
@@ -76,7 +82,7 @@
   - 验收：A8 手动用例通过（`adb shell am force-stop` 后重启，恢复内容与杀前一致）；恢复后可保存或丢弃。
 
 ### 质量与验收
-- [ ] **T-0024 关键流程 Compose UI 测试**（依赖 T-0013、T-0016）
+- [ ] **T-0024 关键流程 Compose UI 测试**（依赖 T-0013、T-0031）
   - 验收：A12 流程通过（打开 → 输入 → 撤销 → 保存 → 重新打开核对）。
 - [ ] **T-0025 10 MB 性能基准**（依赖 T-0020）
   - 验收：A1、A2、A3 数值记录到 `docs/` 或任务单；按结果校准 `goals.md` §5 的成功指标表。
