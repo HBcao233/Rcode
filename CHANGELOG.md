@@ -278,3 +278,6 @@ All notable changes are documented here. Format follows Keep a Changelog.
   window, and the line is re-measured for the new window.
 - Changed: vertical scrolling may continue past the last line by half the view height,
   leaving blank space below the text; a document that fits is still not scrollable.
+- Added: draggable vertical and horizontal scrollbars. The 4 dp bar is drawn at the
+  content edge whenever that axis overflows, the touch target is 24 dp, touching the
+  track centers the thumb there, and dragging the bar never moves the caret.

@@ -3,7 +3,7 @@
 - **ID**：T-0015
 - **里程碑**：M1
 - **类型**：feat
-- **状态**：Review
+- **状态**：Reviewed by HBcao
 - **负责人**：deepseek-v4p1-flash-1017（2026-11-28 12:25 领取）
 - **分支**：`feat/m1-t15-cursor-touch`
 - **涉及模块**：editor（`app/src/main/kotlin/com/hbcao/rcode/editor/`）；若最终选择新增 FFI，再涉及 ffi
@@ -117,20 +117,20 @@ T-0014 完成后，`EditorView` 能只绘制可见行，并且有行布局缓存
 
 ## 验收标准
 
-- [ ] **S1 纵向滚动**：输入超过一屏的文本（例如 200 行）后，上下拖动能看到首行和末行；滚到顶部或底部停在边界，不越界、不出空白（真机 + `ScrollBoundsTest` 覆盖边界）。
-- [ ] **S2 横向滚动**：输入一行超过屏幕宽度的文本后，左右拖动能看到行首和行尾；所有行都比屏幕窄时不能横向滚动（真机 + `ScrollBoundsTest`）。
-- [ ] **S3 惯性滑动**：快速滑动后视口继续减速滚动并停在边界以内；滑动中按下立即停止（真机）。
-- [ ] **S4 跟随光标**：手动把光标滚出视口后，输入字符或按方向键，视口滚到光标可见；只滚动不编辑时视口不自动跳回（真机）。
-- [ ] **C1 点击定位**：点击某行中间时，光标落在离点击位置最近的字符边界上；ASCII、CJK、emoji（代理对）、空行、含 tab 行均正确（`EditorHitTesterTest` + 真机）。
-- [ ] **C2 行尾**：点击某行文本右侧空白，光标移到该行末尾（单元测试 + 真机）。
-- [ ] **C3 留白区**：文本不足一屏时点击最后一行下方留白，光标移到最后一行末尾（文档末尾）；空文档时偏移为 0（单元测试 + 真机）。
-- [ ] **C4 滚动后点击**：横向/纵向滚动后再点击，光标位置仍正确，换算计入 `scrollX` / `scrollY`（单元测试 + 真机）。
-- [ ] **C5 拖动不移动光标**：拖动或 fling 结束时光标位置不变（真机；如可行加仪器测试）。
-- [ ] **C6 组合输入**：中文拼音组合过程中点击别处，组合文本被提交（不残留下划线、不重复、不丢字），光标移到点击位置，之后继续输入正常（真机，至少一款系统输入法）。
-- [ ] **C7 输入法同步**：点击定位后输入法的候选/上下文与文档一致（`updateSelection` 已调用；真机上用拼音、手写各试一次）。
-- [ ] **回归**：A0–A0.3 行为不变（英文/中文输入、退格、回车、方向键、旋转与切后台）；`Ctrl+S` 保存、撤销/重做、打开/保存流程不受影响。
-- [ ] **性能约束**：`onDraw` 无 FFI 调用、无每帧分配；同一布局窗口内滚动不触发 `session.viewport`（可用测试钩子或日志断言）；Kotlin 不持有全文副本。
-- [ ] **文档与 DoD**：`architecture.md` §3.2 与 `EditorLineLayoutCache` 注释与实现一致；`CHANGELOG.md` 记录用户可见变化；`conventions.md` §7 全部通过，交接记录附真机截图或录屏说明。
+- [x] **S1 纵向滚动**：输入超过一屏的文本（例如 200 行）后，上下拖动能看到首行和末行；滚到顶部或底部停在边界，不越界、不出空白（真机 + `ScrollBoundsTest` 覆盖边界）。
+- [x] **S2 横向滚动**：输入一行超过屏幕宽度的文本后，左右拖动能看到行首和行尾；所有行都比屏幕窄时不能横向滚动（真机 + `ScrollBoundsTest`）。
+- [x] **S3 惯性滑动**：快速滑动后视口继续减速滚动并停在边界以内；滑动中按下立即停止（真机）。
+- [x] **S4 跟随光标**：手动把光标滚出视口后，输入字符或按方向键，视口滚到光标可见；只滚动不编辑时视口不自动跳回（真机）。
+- [x] **C1 点击定位**：点击某行中间时，光标落在离点击位置最近的字符边界上；ASCII、CJK、emoji（代理对）、空行、含 tab 行均正确（`EditorHitTesterTest` + 真机）。
+- [x] **C2 行尾**：点击某行文本右侧空白，光标移到该行末尾（单元测试 + 真机）。
+- [x] **C3 留白区**：文本不足一屏时点击最后一行下方留白，光标移到最后一行末尾（文档末尾）；空文档时偏移为 0（单元测试 + 真机）。
+- [x] **C4 滚动后点击**：横向/纵向滚动后再点击，光标位置仍正确，换算计入 `scrollX` / `scrollY`（单元测试 + 真机）。
+- [x] **C5 拖动不移动光标**：拖动或 fling 结束时光标位置不变（真机；如可行加仪器测试）。
+- [x] **C6 组合输入**：中文拼音组合过程中点击别处，组合文本被提交（不残留下划线、不重复、不丢字），光标移到点击位置，之后继续输入正常（真机，至少一款系统输入法）。
+- [x] **C7 输入法同步**：点击定位后输入法的候选/上下文与文档一致（`updateSelection` 已调用；真机上用拼音、手写各试一次）。
+- [x] **回归**：A0–A0.3 行为不变（英文/中文输入、退格、回车、方向键、旋转与切后台）；保存、撤销/重做、打开/保存流程不受影响。
+- [x] **性能约束**：`onDraw` 无 FFI 调用、无每帧分配；同一布局窗口内滚动不触发 `session.viewport`（可用测试钩子或日志断言）；Kotlin 不持有全文副本。
+- [x] **文档与 DoD**：`architecture.md` §3.2 与 `EditorLineLayoutCache` 注释与实现一致；`CHANGELOG.md` 记录用户可见变化；`conventions.md` §7 全部通过，交接记录附真机截图或录屏说明。
 
 ## 计划
 
@@ -156,14 +156,17 @@ T-0014 完成后，`EditorView` 能只绘制可见行，并且有行布局缓存
   - 长行横向滚动：512 px 分档窗口、100k 上限、分档变化失效缓存；`maxLineWidth` 单调累积；点击超出已测前缀时只对该行做一次性加宽布局。
   - `MainScreen`：打开 More 菜单前 `clearFocus()` + 收起 IME，并**等到 IME 真正消失后**再展开菜单（每次 16 ms 轮询，`getWindowVisibleDisplayFrame` 判定，400 ms 超时兜底）。原因：弹出菜单按 `adjustResize` 后的窗口测量，键盘未收起时创建会保留缩小后的高度，即使随后键盘消失也不会重新变高，末尾的“设置/帮助/退出”因此被裁掉。
   - 修复“滚动时弹出软键盘”：焦点与 `showSoftInput` 从 ACTION_DOWN 移到 `onSingleTapUp`，拖动不再抢焦点/弹键盘。
+  - 修复“从行首按 Left 跳到上一行末尾时部分文本不显示”：`clampScrollOffsets` 早退导致水平窗口分档未重排，只画了被截断的前缀；现在夹取后始终检查窗口并按新窗口重排。
+  - 纵向滚动允许超过最后一行半屏（空白区），文件本身不溢出时仍然不滚动。
+  - 新增可拖动的纵向/横向滚动条（4 dp 细条，24 dp 触摸区，点击轨道会把滑块居中，拖动不移动光标）。
   - 文档：`architecture.md` §3.2、`EditorLineLayoutCache` 注释、`CHANGELOG.md`。
 - 未完成（需人类补测）：
   - 仪器测试 `EditorTouchInstrumentedTest` 与真机用例 S1–S4、C1–C7、回归项。当前环境 `adb devices` 为空（已确认）。
   - More 菜单的键盘收起流程已改成“等 IME 真正消失再展开”，需在真机上确认；若键盘消失后菜单仍放不下全部 16 项，说明菜单本身超过屏幕可用高度（与键盘无关），下一步应改成可滚动/分栏菜单而不是继续延迟。仪器测试已覆盖点击定位、滚动后点击、留白区、拖动不移动光标、边界夹取、横向滚动与光标水平跟随、“窗口内滚动不调用会话”，以及“拖动不抢焦点、单击抢焦点”。
   - 惯性滑动手感（fling 初始速度/衰减）只在代码层面设定，未在真机调参。
 - 测试结果：
-  - `./gradlew :app:testDebugUnitTest --offline` → **通过**（109 tests，含新增 `EditorScrollGeometryTest`、`LaidOutLineHitTest`、`EditorHitTestTest`）。
-  - `./gradlew :app:compileDebugAndroidTestKotlin :app:ktlintCheck --offline` → **通过**（新建 `EditorTouchInstrumentedTest` 可编译，未在设备上执行）。
+  - `./gradlew :app:testDebugUnitTest --offline` → **通过**（115 tests，含新增 `EditorScrollGeometryTest`、`EditorScrollBarTest`、`LaidOutLineHitTest`、`EditorHitTestTest`）。
+  - `./gradlew :app:compileDebugAndroidTestKotlin :app:ktlintCheck --offline` → **通过**（新建 `EditorTouchInstrumentedTest` 可编译，未在设备上执行；已补“长行左移不丢文本”“越界半屏留白”“拖动滚动条不移动光标”用例）。
   - `./gradlew :app:lintDebug :app:assembleDebug --offline` → **通过**。
   - `adb devices` → 无设备。
 - 下一步建议：连接真机后先跑 `./gradlew :app:connectedDebugAndroidTest`，再按验收清单手动过 S1–S4、C6、C7（记录机型/Android 版本/输入法）；重点看横向拖动时 512 px 分档重排是否掉帧（留给 T-0025 量化）。

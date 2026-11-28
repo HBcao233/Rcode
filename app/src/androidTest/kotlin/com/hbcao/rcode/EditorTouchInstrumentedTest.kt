@@ -221,6 +221,36 @@ class EditorTouchInstrumentedTest {
     }
 
     @Test
+    fun draggingTheScrollBarScrollsWithoutMovingTheCaret() {
+        val session = UniffiEditorSession()
+        val scenario = ActivityScenario.launch(ComponentActivity::class.java)
+        try {
+            scenario.onActivity { activity ->
+                session.open(document(200))
+                val view = EditorView(activity, session, colors())
+                activity.setContentView(view)
+                view.layout(0, 0, VIEW_WIDTH, VIEW_HEIGHT)
+                view.refreshViewport()
+                session.moveCursor(3)
+                val caretBefore = session.cursor().byteOffset
+
+                // The vertical bar's touch target is the right edge; drag the thumb down.
+                val barX = VIEW_WIDTH - 1f
+                val lineHeight = view.lineHeightPx()
+                dispatch(view, MotionEvent.ACTION_DOWN, barX, lineHeight * 2f)
+                dispatch(view, MotionEvent.ACTION_MOVE, barX, lineHeight * 20f)
+                dispatch(view, MotionEvent.ACTION_UP, barX, lineHeight * 20f)
+
+                assertTrue("the scrollbar drag must scroll", view.scrollYPixels > 0f)
+                assertEquals(caretBefore, session.cursor().byteOffset)
+            }
+        } finally {
+            scenario.close()
+            session.close()
+        }
+    }
+
+    @Test
     fun scrollingInsideTheLoadedWindowDoesNotCallTheSession() {
         val session = CountingSession(UniffiEditorSession())
         try {

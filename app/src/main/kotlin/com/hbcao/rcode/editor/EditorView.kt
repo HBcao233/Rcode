@@ -67,6 +67,18 @@ class EditorView(
     private val caretWidth: Float = dp(2f)
     private val caretInset: Float = dp(1f)
 
+    /** Drawn scrollbar thumb; semi-transparent so it does not hide code underneath. */
+    private val scrollBarPaint =
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = (colors.text and 0x00FFFFFF) or (SCROLLBAR_ALPHA shl 24)
+        }
+    private val scrollBarThickness: Float = dp(SCROLLBAR_THICKNESS_DP)
+    private val scrollBarTouchWidth: Float = dp(SCROLLBAR_TOUCH_WIDTH_DP)
+    private val scrollBarMinLength: Float = dp(SCROLLBAR_MIN_LENGTH_DP)
+    private val scrollBarInset: Float = dp(SCROLLBAR_INSET_DP)
+    private val scrollBarRadius: Float = scrollBarThickness / 2f
+
     /** Measures advances once per text range; shared by every line of this view. */
     private val layoutBuilder = LineLayoutBuilder(PaintLineMeasurer(textPaint))
 
@@ -112,6 +124,12 @@ class EditorView(
     private var composingUnderlines: List<ComposingUnderline> = emptyList()
 
     private val scroller = OverScroller(context)
+
+    /** Which draggable scrollbar currently owns the touch stream (issue 3). */
+    private var scrollBarDragAxis: Int = SCROLLBAR_NONE
+
+    /** Distance from the thumb's start edge to the finger when the drag began. */
+    private var scrollBarGrabOffset: Float = 0f
 
     private val gestureDetector =
         GestureDetector(
@@ -338,6 +356,13 @@ class EditorView(
     private fun isSaveShortcut(event: KeyEvent): Boolean = event.keyCode == KeyEvent.KEYCODE_S && event.isCtrlPressed
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (scrollBarDragAxis != SCROLLBAR_NONE) {
+            handleScrollBarTouch(event)
+            return true
+        }
+        if (event.actionMasked == MotionEvent.ACTION_DOWN && beginScrollBarDrag(event.x, event.y)) {
+            return true
+        }
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
             // Touching the editor stops an ongoing fling (S3). Focus and the IME wait for
             // `onSingleTapUp`: a drag starts with the same ACTION_DOWN and must not open
@@ -505,6 +530,144 @@ class EditorView(
             bucketPx = SCROLL_WINDOW_BUCKET_PX,
             maxWindowPx = MAX_LINE_LAYOUT_WINDOW_PX,
         )
+
+    // endregion
+
+    // region scrollbars (T-0015 issue 3)
+
+    private fun verticalScrollBarThumb(): EditorScrollBar.Thumb? =
+        EditorScrollBar.thumb(
+            viewLength = contentHeight(),
+            maxScroll = maxScrollY(),
+            scroll = scrollY,
+            minThumbPx = scrollBarMinLength,
+        )
+
+    private fun horizontalScrollBarThumb(): EditorScrollBar.Thumb? =
+        EditorScrollBar.thumb(
+            viewLength = (width - paddingLeft - paddingRight).toFloat(),
+            maxScroll = maxScrollX(),
+            scroll = scrollX,
+            minThumbPx = scrollBarMinLength,
+        )
+
+    /**
+     * Starts a scrollbar drag when [x] / [y] lands on a bar; returns whether it did.
+     *
+     * The visible bar is [scrollBarThickness] wide, but the touch target next to the edge
+     * is [scrollBarTouchWidth] so it can actually be grabbed with a finger. Touching the
+     * track away from the thumb centers the thumb there before dragging.
+     */
+    private fun beginScrollBarDrag(
+        x: Float,
+        y: Float,
+    ): Boolean {
+        if (width <= 0 || height <= 0) return false
+        val vertical = verticalScrollBarThumb()
+        if (vertical != null) {
+            val touchLeft = width - paddingRight - scrollBarTouchWidth
+            if (x >= touchLeft && y >= paddingTop && y <= height - paddingBottom) {
+                scroller.forceFinished(true)
+                scrollBarDragAxis = SCROLLBAR_VERTICAL
+                val thumbTop = paddingTop + vertical.start
+                scrollBarGrabOffset =
+                    if (y >= thumbTop && y <= thumbTop + vertical.length) {
+                        y - thumbTop
+                    } else {
+                        vertical.length / 2f
+                    }
+                dragScrollBarTo(y)
+                return true
+            }
+        }
+        val horizontal = horizontalScrollBarThumb()
+        if (horizontal != null) {
+            val touchTop = height - paddingBottom - scrollBarTouchWidth
+            if (y >= touchTop && x >= paddingLeft && x <= width - paddingRight) {
+                scroller.forceFinished(true)
+                scrollBarDragAxis = SCROLLBAR_HORIZONTAL
+                val thumbLeft = paddingLeft + horizontal.start
+                scrollBarGrabOffset =
+                    if (x >= thumbLeft && x <= thumbLeft + horizontal.length) {
+                        x - thumbLeft
+                    } else {
+                        horizontal.length / 2f
+                    }
+                dragScrollBarTo(x)
+                return true
+            }
+        }
+        return false
+    }
+
+    /** Moves the viewport so the dragged thumb follows [position] (px on its axis). */
+    private fun dragScrollBarTo(position: Float) {
+        when (scrollBarDragAxis) {
+            SCROLLBAR_VERTICAL -> {
+                val thumbStart = position - paddingTop - scrollBarGrabOffset
+                val scroll =
+                    EditorScrollBar.scrollForThumbStart(
+                        thumbStart = thumbStart,
+                        viewLength = contentHeight(),
+                        maxScroll = maxScrollY(),
+                        minThumbPx = scrollBarMinLength,
+                    )
+                scrollContentTo(scrollX, scroll)
+            }
+
+            SCROLLBAR_HORIZONTAL -> {
+                val thumbStart = position - paddingLeft - scrollBarGrabOffset
+                val scroll =
+                    EditorScrollBar.scrollForThumbStart(
+                        thumbStart = thumbStart,
+                        viewLength = (width - paddingLeft - paddingRight).toFloat(),
+                        maxScroll = maxScrollX(),
+                        minThumbPx = scrollBarMinLength,
+                    )
+                scrollContentTo(scroll, scrollY)
+            }
+        }
+    }
+
+    private fun handleScrollBarTouch(event: MotionEvent) {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_MOVE ->
+                dragScrollBarTo(if (scrollBarDragAxis == SCROLLBAR_VERTICAL) event.y else event.x)
+
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> scrollBarDragAxis = SCROLLBAR_NONE
+            else -> Unit
+        }
+    }
+
+    /** Draws the thumbs on top of the text, outside the scrolled content translation. */
+    private fun drawScrollBars(canvas: Canvas) {
+        verticalScrollBarThumb()?.let { thumb ->
+            val left = width - paddingRight - scrollBarInset - scrollBarThickness
+            val top = paddingTop + thumb.start
+            canvas.drawRoundRect(
+                left,
+                top,
+                left + scrollBarThickness,
+                top + thumb.length,
+                scrollBarRadius,
+                scrollBarRadius,
+                scrollBarPaint,
+            )
+        }
+        horizontalScrollBarThumb()?.let { thumb ->
+            val top = height - paddingBottom - scrollBarInset - scrollBarThickness
+            val left = paddingLeft + thumb.start
+            canvas.drawRoundRect(
+                left,
+                top,
+                left + thumb.length,
+                top + scrollBarThickness,
+                scrollBarRadius,
+                scrollBarRadius,
+                scrollBarPaint,
+            )
+        }
+    }
 
     // endregion
 
@@ -897,6 +1060,7 @@ class EditorView(
         }
         caretRect?.let { canvas.drawRect(it, caretPaint) }
         canvas.restore()
+        drawScrollBars(canvas)
     }
 
     private class ComposingUnderline(
@@ -928,5 +1092,16 @@ class EditorView(
 
         /** Q-T15-1: a very long line is never measured past this window. */
         const val MAX_LINE_LAYOUT_WINDOW_PX = 100_000f
+
+        /** Scrollbar geometry (issue 3): thin bar, wide invisible touch target. */
+        const val SCROLLBAR_THICKNESS_DP = 4f
+        const val SCROLLBAR_TOUCH_WIDTH_DP = 24f
+        const val SCROLLBAR_MIN_LENGTH_DP = 24f
+        const val SCROLLBAR_INSET_DP = 2f
+        const val SCROLLBAR_ALPHA = 96
+
+        const val SCROLLBAR_NONE = 0
+        const val SCROLLBAR_VERTICAL = 1
+        const val SCROLLBAR_HORIZONTAL = 2
     }
 }
