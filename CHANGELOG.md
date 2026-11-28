@@ -263,9 +263,12 @@ All notable changes are documented here. Format follows Keep a Changelog.
   geometry (`LaidOutLineHitTest`, `EditorHitTestTest`) and instrumented tests for tap
   placement, drag-without-caret-move, bound clamping, horizontal scroll and the
   "no session call while scrolling inside the window" rule.
-- Changed the "more" menu: opening it now clears editor focus and hides the soft
-  keyboard first, so the dropdown is laid out in the full window height and every item
-  fits (Q-T15-3).
+- Changed the "more" menu: opening it now clears editor focus, hides the soft
+  keyboard, and waits until the keyboard has actually gone before the dropdown opens.
+  The popup is measured against the `adjustResize` window, so creating it while the IME
+  was still up kept the reduced height and clipped the last items (设置/帮助/退出); the
+  open is now deferred until the IME is gone, with a 400 ms timeout so the button can
+  never feel dead if the IME never hides.
 - Fixed: a drag no longer focuses the editor or opens the soft keyboard. Focus and
   `showSoftInput` now wait for the tap callback, so starting a scroll with the keyboard
   hidden no longer pops it up; a tap still focuses the editor and shows the keyboard.

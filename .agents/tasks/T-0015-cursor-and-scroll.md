@@ -154,11 +154,12 @@ T-0014 完成后，`EditorView` 能只绘制可见行，并且有行布局缓存
   - 纯逻辑：`EditorScrollGeometry`（横纵边界、`scrollY→首行`、滚到可见、点击 y→行、布局窗口分档）、`LaidOutLine.textIndexForX`（中点规则、tab、代理对、截断）、`EditorHitTest`（UTF-16 索引 → UTF-8 偏移）。
   - `EditorView`：像素级 `scrollX` / `scrollY`，`firstLine` 派生；`canvas.translate` 绘制；`GestureDetector` + `OverScroller` 实现拖动、fling、按下打断、单击；单击 → 结束组合 → `moveCursor` → `InputMethodManager.updateSelection`；编辑/方向键/尺寸变化后最小幅度滚到光标可见；滚动仅在离开已加载三屏时调用 `viewport`。
   - 长行横向滚动：512 px 分档窗口、100k 上限、分档变化失效缓存；`maxLineWidth` 单调累积；点击超出已测前缀时只对该行做一次性加宽布局。
-  - `MainScreen`：打开 More 菜单前 `clearFocus()` + 收起 IME（Q-T15-3 的追加修复）。
+  - `MainScreen`：打开 More 菜单前 `clearFocus()` + 收起 IME，并**等到 IME 真正消失后**再展开菜单（每次 16 ms 轮询，`getWindowVisibleDisplayFrame` 判定，400 ms 超时兜底）。原因：弹出菜单按 `adjustResize` 后的窗口测量，键盘未收起时创建会保留缩小后的高度，即使随后键盘消失也不会重新变高，末尾的“设置/帮助/退出”因此被裁掉。
   - 修复“滚动时弹出软键盘”：焦点与 `showSoftInput` 从 ACTION_DOWN 移到 `onSingleTapUp`，拖动不再抢焦点/弹键盘。
   - 文档：`architecture.md` §3.2、`EditorLineLayoutCache` 注释、`CHANGELOG.md`。
 - 未完成（需人类补测）：
-  - 仪器测试 `EditorTouchInstrumentedTest` 与真机用例 S1–S4、C1–C7、回归项。当前环境 `adb devices` 为空（已确认）。仪器测试已覆盖点击定位、滚动后点击、留白区、拖动不移动光标、边界夹取、横向滚动与光标水平跟随、“窗口内滚动不调用会话”，以及“拖动不抢焦点、单击抢焦点”。
+  - 仪器测试 `EditorTouchInstrumentedTest` 与真机用例 S1–S4、C1–C7、回归项。当前环境 `adb devices` 为空（已确认）。
+  - More 菜单的键盘收起流程已改成“等 IME 真正消失再展开”，需在真机上确认；若键盘消失后菜单仍放不下全部 16 项，说明菜单本身超过屏幕可用高度（与键盘无关），下一步应改成可滚动/分栏菜单而不是继续延迟。仪器测试已覆盖点击定位、滚动后点击、留白区、拖动不移动光标、边界夹取、横向滚动与光标水平跟随、“窗口内滚动不调用会话”，以及“拖动不抢焦点、单击抢焦点”。
   - 惯性滑动手感（fling 初始速度/衰减）只在代码层面设定，未在真机调参。
 - 测试结果：
   - `./gradlew :app:testDebugUnitTest --offline` → **通过**（109 tests，含新增 `EditorScrollGeometryTest`、`LaidOutLineHitTest`、`EditorHitTestTest`）。

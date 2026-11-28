@@ -2,7 +2,9 @@ package com.hbcao.rcode.ui
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Rect
 import android.text.format.Formatter
+import android.view.View
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -41,6 +43,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
@@ -90,6 +93,8 @@ import com.hbcao.rcode.state.SaveFailure
 import com.hbcao.rcode.state.SaveOutcome
 import com.hbcao.rcode.state.SaveRequest
 import com.hbcao.rcode.ui.theme.EditorColors
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Main (and currently only) screen: the M1 editor.
@@ -282,6 +287,26 @@ private val ANY_MIME_TYPE = arrayOf("*/*")
 
 /** Q-T13-4: `CreateDocument` keeps the extension the user types in the suggested name. */
 private const val SAVE_MIME_TYPE = "*/*"
+
+/** Q-T15-3: how long to wait for the IME to finish hiding before opening the menu anyway. */
+private const val IME_HIDE_TIMEOUT_MILLIS = 400L
+
+/** Q-T15-3: polling interval while waiting for the IME to hide. */
+private const val IME_HIDE_POLL_MILLIS = 16L
+
+/**
+ * Q-T15-3: whether the soft keyboard currently covers the bottom of the display.
+ *
+ * `getWindowVisibleDisplayFrame` already shrinks with `adjustResize` on every supported
+ * API, unlike `WindowInsets.ime`, which is only reported from API 30. The 1/4 threshold
+ * ignores status/navigation bars.
+ */
+private fun isImeVisible(view: View): Boolean {
+    val frame = Rect()
+    view.getWindowVisibleDisplayFrame(frame)
+    val displayHeight = view.resources.displayMetrics.heightPixels
+    return displayHeight - frame.bottom > displayHeight / 4
+}
 
 @Composable
 private fun OpenRequestDialogs(
@@ -493,17 +518,33 @@ private fun MoreMenuButton(
     onOpenFile: () -> Unit,
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    var menuPending by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val view = LocalView.current
 
+    // Q-T15-3 (follow-up): the dropdown is measured against the `adjustResize` window.
+    // If it is created while the IME is still up it keeps the reduced height and clips
+    // its last items even after the keyboard has hidden. Hide the IME first and open the
+    // menu only once the keyboard is actually gone (with a timeout, so a stuck IME can
+    // never make the button dead).
+    LaunchedEffect(menuPending) {
+        if (!menuPending) return@LaunchedEffect
+        withTimeoutOrNull(IME_HIDE_TIMEOUT_MILLIS) {
+            while (isImeVisible(view)) delay(IME_HIDE_POLL_MILLIS)
+        }
+        // Let the resized window settle before the popup measures its height.
+        withFrameNanos { }
+        withFrameNanos { }
+        menuPending = false
+        showMenu = true
+    }
+
     IconButton(onClick = {
-        // Q-T15-3: hide the IME *before* the menu opens. With the keyboard still shown,
-        // the dropdown is laid out in the remaining space and cannot show every item.
         focusManager.clearFocus()
         (context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
             ?.hideSoftInputFromWindow(view.windowToken, 0)
-        showMenu = true
+        menuPending = true
     }) {
         Icon(
             imageVector = MoreVert,
