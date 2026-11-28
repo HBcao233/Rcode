@@ -202,6 +202,25 @@ class EditorTouchInstrumentedTest {
     }
 
     @Test
+    fun scrollingPastTheEndShowsHalfAScreenOfBlank() {
+        val session = UniffiEditorSession()
+        try {
+            instrumentation.runOnMainSync {
+                val lines = 200
+                val view = openSessionView(session, document(lines))
+                val overflow = lines * view.lineHeightPx() - VIEW_HEIGHT
+                assertEquals(overflow + VIEW_HEIGHT / 2f, view.maxScrollYPixels(), 1f)
+
+                view.scrollContentForTest(0f, 1_000_000f)
+                assertEquals(view.maxScrollYPixels(), view.scrollYPixels, 0f)
+                assertEquals("0123456789", view.visibleTextAt(lines - 1))
+            }
+        } finally {
+            session.close()
+        }
+    }
+
+    @Test
     fun scrollingInsideTheLoadedWindowDoesNotCallTheSession() {
         val session = CountingSession(UniffiEditorSession())
         try {

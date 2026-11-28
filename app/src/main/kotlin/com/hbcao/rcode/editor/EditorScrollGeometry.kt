@@ -26,10 +26,16 @@ internal object EditorScrollGeometry {
         paddingTop: Int,
         paddingBottom: Int,
         viewHeight: Int,
+        overscrollPx: Float = 0f,
     ): Float {
         if (lineHeight <= 0f) return 0f
         val contentBottom = paddingTop + lineCount.coerceAtLeast(1) * lineHeight + paddingBottom
-        return (contentBottom - viewHeight).coerceAtLeast(0f)
+        val overflow = contentBottom - viewHeight
+        // T-0015 issue 2: once the document overflows, allow one extra half screen so the
+        // last lines can be pulled up and blank space appears below them. A document that
+        // already fits is never scrolled.
+        if (overflow <= 0f) return 0f
+        return overflow + overscrollPx.coerceAtLeast(0f)
     }
 
     /**

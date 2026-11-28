@@ -19,6 +19,14 @@ class EditorScrollGeometryTest {
     }
 
     @Test
+    fun overscrollAddsHalfAScreenOnlyWhenTheDocumentOverflows() {
+        // Issue 2: 1 720 px of overflow plus a 150 px overscroll allowance.
+        assertEquals(1_870f, maxScrollY(lineCount = 100, viewHeight = 300, overscrollPx = 150f), 0f)
+        // A document that fits is never scrolled, with or without overscroll.
+        assertEquals(0f, maxScrollY(lineCount = 10, viewHeight = 300, overscrollPx = 150f), 0f)
+    }
+
+    @Test
     fun verticalRangeShowsTheLastLineAtTheBottom() {
         // 100 lines × 20 px = 2 000 px of content, plus 20 px padding, in a 300 px view.
         assertEquals(1_720f, maxScrollY(lineCount = 100, viewHeight = 300), 0f)
@@ -124,6 +132,7 @@ class EditorScrollGeometryTest {
     private fun maxScrollY(
         lineCount: Int,
         viewHeight: Int,
+        overscrollPx: Float = 0f,
     ): Float =
         EditorScrollGeometry.maxScrollY(
             lineCount = lineCount,
@@ -131,6 +140,7 @@ class EditorScrollGeometryTest {
             paddingTop = 10,
             paddingBottom = 10,
             viewHeight = viewHeight,
+            overscrollPx = overscrollPx,
         )
 
     private fun maxScrollX(

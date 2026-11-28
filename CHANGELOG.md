@@ -276,3 +276,5 @@ All notable changes are documented here. Format follows Keep a Changelog.
   jumped the horizontal offset without re-laying out the loaded lines, so only the
   truncated prefix of that line was painted. Clamping now always re-checks the layout
   window, and the line is re-measured for the new window.
+- Changed: vertical scrolling may continue past the last line by half the view height,
+  leaving blank space below the text; a document that fits is still not scrollable.

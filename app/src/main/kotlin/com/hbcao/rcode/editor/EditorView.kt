@@ -435,6 +435,8 @@ class EditorView(
             paddingTop = paddingTop,
             paddingBottom = paddingBottom,
             viewHeight = height,
+            // Issue 2: after the last line, allow pulling the content up half a view.
+            overscrollPx = height / 2f,
         )
 
     private fun contentHeight(): Float = (height - paddingTop - paddingBottom).toFloat()
@@ -460,7 +462,8 @@ class EditorView(
             return
         }
         val first = firstLine
-        val last = first + visibleRows
+        // The overscroll region below the last line does not need more lines.
+        val last = minOf(first + visibleRows, (lineCount - 1).coerceAtLeast(0))
         val laidOutLast = layoutFirstLine + laidOutSlices.size - 1
         if (first < layoutFirstLine || last > laidOutLast) {
             loadViewport(visibleRows, first)
