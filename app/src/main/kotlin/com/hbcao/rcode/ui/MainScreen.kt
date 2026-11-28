@@ -3,6 +3,7 @@ package com.hbcao.rcode.ui
 import android.content.Context
 import android.content.Intent
 import android.text.format.Formatter
+import android.view.inputmethod.InputMethodManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -43,6 +44,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
@@ -490,8 +493,18 @@ private fun MoreMenuButton(
     onOpenFile: () -> Unit,
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
+    val view = LocalView.current
 
-    IconButton(onClick = { showMenu = true }) {
+    IconButton(onClick = {
+        // Q-T15-3: hide the IME *before* the menu opens. With the keyboard still shown,
+        // the dropdown is laid out in the remaining space and cannot show every item.
+        focusManager.clearFocus()
+        (context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)
+            ?.hideSoftInputFromWindow(view.windowToken, 0)
+        showMenu = true
+    }) {
         Icon(
             imageVector = MoreVert,
             contentDescription = "更多选项",
