@@ -39,11 +39,13 @@
 ### 编辑器视图
 
 - [ ] **T-0016 选区**（依赖 T-0015）
-  - 验收：长按选词、拖动选区；选词后在上方或下方显示 Copy, Cut, Paste 按钮（即 context菜单）。
+  - 范围：长按选词、拖动选区；选词后在上方或下方显示 Copy, Cut, Paste 按钮（即 context菜单）。
+  - 定位光标时在竖线光标下方显示一个 类似 css border-radius: 50% 0 50% 50% 效果的 RoundedCornerShape 水滴形光标，颜色 #2196f3，并旋转45度使尖端朝上，拖动"水滴"可以移动光标
+  - 选词时在选区左右两端各显示一个"水滴" (一个 50% 0 50% 50%, 另一个 0 50% 50% 50%), 拖动可以改变选区范围
 - [ ] **T-0028 底部快捷按钮**
-  - 范围：底部 action buttons 接线，updateSelection + enable 状态。
+  - 范围：底部 action buttons 接线，updateSelection + enable 状态；底部快捷保存按钮，在dirty状态下显示圆点。
 - [ ] **T-0029 键盘输入**
-  - 范围：A-Z输入；Ctrl+S/Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y 等常见快捷键。
+  - 范围：A-Z、数字、符号输入；Ctrl+S/Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y 等常见快捷键。
 - [ ] **T-0030 鼠标输入**
   - 范围：鼠标接入时左键选区，右键显示context菜单，滚轮上下滚动。
 
