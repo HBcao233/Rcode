@@ -3,7 +3,7 @@
 - **ID**：T-0014
 - **里程碑**：M1（A1 的初版测量、A2/A3 的渲染基础；G2、G3）
 - **类型**：feat
-- **状态**：Review
+- **状态**：Reviewed by HBcao
 - **分支**：`feat/m1-t14-canvas-rendering`（已创建；任务单与实现均提交于此）
 - **负责人**：deepseek-v4p1-flash-1017 <> (2026-11-27 17:27 领取)
 - **涉及模块**：editor（`EditorView`、新增行布局/缓存类）、ui（`AndroidView` 宿主，通常不改）、ffi（只读 `viewport`，不改签名）；不涉及 rust-core / uniffi-bridge（本任务不新增 FFI）

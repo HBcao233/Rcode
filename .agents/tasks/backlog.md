@@ -33,32 +33,24 @@
   - M1 是否需要支持其它应用通过 `ACTION_VIEW`/`ACTION_EDIT` 直接打开文件，还是仅应用内 SAF 选择。**M1 仅应用内选择**，入口放到 M2。
 - [x] **Q15 Undo 内存上限**：
   - 大文件的撤销历史是否限制条数或字节数。**按字节上限 64 MB 截断最旧历史**。
-- [x] **Q-T8-1 组合输入是否纳入 T-0008**：
-  - 方案 A：纳入。新增 `begin_composition`/`end_composition`，一次拼音提交 = 一个撤销步，取消组合 = 零步（符合 `editor-rendering` skill）。
-- [x] **Q-T8-2 连续编辑的合并上限**：
-  - 合并组达到 64 KiB 时断开（只在合并时生效，单次粘贴不受限），保证一次 undo 的耗时有界。
-- [x] **Q-T8-3 撤销/重做后的光标位置**：
-  - undo 恢复到编辑前光标，redo 放在重做文本末尾。
-- [x] **Q-T8-4 撤销/重做 UI 接线归属**：
-  - 本任务只做 Rust + FFI + Kotlin 桥接/输入层；`MainScreen` 的 Undo/Redo 按钮与快捷键由 T-0013 或新建 T-0028 在 A12 前接线（含按钮 enable 状态、撤销后 `updateSelection`、真机验证）。
 
 ## Backlog
 
 ### 编辑器视图
 
-- [ ] **T-0014 Canvas 可见行渲染**（依赖已满足：T-0011、T-0012、T-0013 均 Reviewed）
-  - 任务单 `T-0014-canvas-line-rendering.md` - Review（实现完成，JVM/构建/lint 通过；仪器与真机用例待人类补测）
-  - 范围：自定义 Canvas 只绘制可见行；行布局缓存按版本号失效；视口 + 预取一屏。
-  - 验收：10 MB 文件可滚动；A1 首屏 < 500 ms 的初版测量结果已记录。
-  - 相关 skill：editor-rendering、perf-benchmark
-- [ ] **T-0028 键盘A-Z 与 IME 快捷键接线**
-  - 范围：按钮； Ctrl+S/Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y；updateSelection + enable 状态。
 - [ ] **T-0015 光标（触摸）**（依赖 T-0014）
-  - 验收：单击定位光标；光标位置由 Rust 返回的字符偏移决定。
+  - 验收：单击定位光标；光标位置由 Rust 返回的字符偏移决定。触摸滑动与窗口滚动方向相反（上滑窗口向下滚动，下滑窗口向上滚动，左滑窗口向右，右滑窗口向左）。
 - [ ] **T-0016 选区**（依赖 T-0015）
-  - 验收：长按选词、拖动选区
+  - 验收：长按选词、拖动选区；选词后在上方或下方显示 Copy, Cut, Paste 按钮（即 context菜单）。
+- [ ] **T-0028 底部快捷按钮**
+  - 范围：底部 action buttons 接线，updateSelection + enable 状态。
+- [ ] **T-0029 键盘输入**
+  - 范围：A-Z输入；Ctrl+S/Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y 等常见快捷键。
+- [ ] **T-0030 鼠标输入**
+  - 范围：鼠标接入时左键选区，右键显示context菜单，滚轮上下滚动。
 
 ### 语法高亮
+
 - [ ] **T-0017 高亮框架与 JSON/Rust 首批 grammar**（依赖 Q11、Q13）
   - 范围：`core/crates/rcode-syntax`，输出 span（字节范围 + 类别）；JSON、Rust 两种语言先跑通。
   - 验收：`insta` 快照稳定；span 不跨越 UTF-8 字符边界。
@@ -133,6 +125,8 @@
   - 范围：通过 `rcode-ffi` 暴露 open / edit / 批量取行 / 当前版本号（undo / redo 已由 T-0008 导出，本任务复用并按需重组签名）。`open` 内部调用 `clear_history()`，加载本身不得成为可撤销步骤。Kotlin 侧不缓存完整文本（architecture §3.1）。
   - 验收：Kotlin 仪器测试可完成“打开 → 插入 → 撤销 → 取行”；FFI 层不 panic（`catch_unwind` 或等价保证）。
 
+### 文件读写
+
 - [x] **T-0012 SAF 打开文件**（依赖 T-0009、T-0011、Q14）
   - 任务单 `T-0012-saf-open.md` - Reviewed
   - 分支 `feat/m1-t12-saf-open`，负责人 deepseek-v4p1-flash-1017
@@ -140,11 +134,18 @@
   - 验收：选择文件后可进入编辑；读取失败有可见错误提示；不吞异常。
   - 备注：仅通过手动安装apk 确认 SAF 可以打开并读取文件，`connectedDebugAndroidTest` 未跑
 
-### 文件读写
 - [x] **T-0013 保存流程接入 UI**（依赖 T-0010、T-0012）
   - 任务单 `T-0013-save-ui.md` - Reviewed
   - 范围：保存菜单/工具栏 → Rust `encode(format)` → `AtomicDocumentSaver`；成功/失败反馈、脏状态改为“最近保存版本”、未命名与只读文档的另存为入口。
   - 验收：保存按钮与快捷路径可用；保存成功/失败有反馈；A6、A7 的仪器测试通过。
+
+### 编辑器视图
+
+- [x] **T-0014 Canvas 可见行渲染**（依赖已满足：T-0011、T-0012、T-0013 均 Reviewed）
+  - 任务单 `T-0014-canvas-line-rendering.md` - Review（实现完成，JVM/构建/lint 通过；仪器与真机用例待人类补测）
+  - 范围：自定义 Canvas 只绘制可见行；行布局缓存按版本号失效；视口 + 预取一屏。
+  - 验收：10 MB 文件可滚动；A1 首屏 < 500 ms 的初版测量结果已记录。
+  - 相关 skill：editor-rendering、perf-benchmark
 
 ## 阻塞
 
