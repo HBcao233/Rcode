@@ -1,6 +1,11 @@
 package com.hbcao.rcode
 
 import android.graphics.Color
+import android.os.SystemClock
+import android.view.MotionEvent
+import android.view.View
+import androidx.activity.ComponentActivity
+import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.hbcao.rcode.bridge.UniffiEditorSession
@@ -13,6 +18,7 @@ import com.hbcao.rcode.editor.EncodedDocument
 import com.hbcao.rcode.editor.OpenedDocumentState
 import com.hbcao.rcode.ui.theme.EditorColors
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -183,6 +189,52 @@ class EditorTouchInstrumentedTest {
             }
         } finally {
             session.close()
+        }
+    }
+
+    @Test
+    fun scrollingDoesNotFocusTheEditorButTappingDoes() {
+        val session = UniffiEditorSession()
+        val scenario = ActivityScenario.launch(ComponentActivity::class.java)
+        try {
+            scenario.onActivity { activity ->
+                session.open(document(200))
+                val view = EditorView(activity, session, colors())
+                activity.setContentView(view)
+                view.layout(0, 0, VIEW_WIDTH, VIEW_HEIGHT)
+                view.refreshViewport()
+                view.clearFocus()
+                assertFalse("precondition: the editor is not focused", view.isFocused)
+
+                // A vertical drag: ACTION_DOWN, a move beyond touch slop, ACTION_UP.
+                dispatch(view, MotionEvent.ACTION_DOWN, 100f, 100f)
+                dispatch(view, MotionEvent.ACTION_MOVE, 100f, 500f)
+                dispatch(view, MotionEvent.ACTION_UP, 100f, 500f)
+                assertFalse("a scroll gesture must not focus the editor", view.isFocused)
+
+                // A tap at the same point focuses it and asks for the keyboard.
+                dispatch(view, MotionEvent.ACTION_DOWN, 100f, 100f)
+                dispatch(view, MotionEvent.ACTION_UP, 100f, 100f)
+                assertTrue("a tap must focus the editor", view.isFocused)
+            }
+        } finally {
+            scenario.close()
+            session.close()
+        }
+    }
+
+    private fun dispatch(
+        view: View,
+        action: Int,
+        x: Float,
+        y: Float,
+    ) {
+        val now = SystemClock.uptimeMillis()
+        val event = MotionEvent.obtain(now, now, action, x, y, 0)
+        try {
+            view.dispatchTouchEvent(event)
+        } finally {
+            event.recycle()
         }
     }
 

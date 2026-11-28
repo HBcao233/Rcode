@@ -266,3 +266,6 @@ All notable changes are documented here. Format follows Keep a Changelog.
 - Changed the "more" menu: opening it now clears editor focus and hides the soft
   keyboard first, so the dropdown is laid out in the full window height and every item
   fits (Q-T15-3).
+- Fixed: a drag no longer focuses the editor or opens the soft keyboard. Focus and
+  `showSoftInput` now wait for the tap callback, so starting a scroll with the keyboard
+  hidden no longer pops it up; a tap still focuses the editor and shows the keyboard.

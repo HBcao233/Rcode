@@ -121,6 +121,10 @@ class EditorView(
 
                 override fun onSingleTapUp(e: MotionEvent): Boolean {
                     performClick()
+                    // A tap is the only touch gesture that may focus the editor and open
+                    // the IME; a drag must not (it would pop the keyboard up on scroll).
+                    if (!isFocused) requestFocus()
+                    showKeyboard()
                     moveCaretTo(e.x, e.y)
                     return true
                 }
@@ -335,18 +339,16 @@ class EditorView(
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-            // Touching the editor stops an ongoing fling (S3).
+            // Touching the editor stops an ongoing fling (S3). Focus and the IME wait for
+            // `onSingleTapUp`: a drag starts with the same ACTION_DOWN and must not open
+            // the keyboard.
             scroller.forceFinished(true)
-            if (!isFocused) {
-                requestFocus()
-            }
             if (inputHandler.isComposing) {
                 // Keep the visible composing text, but do not scroll back to the caret:
                 // the user may be starting a drag (C6).
                 inputHandler.finishComposingText()
                 refreshViewport(followCaret = false)
             }
-            showKeyboard()
         }
         gestureDetector.onTouchEvent(event)
         return true

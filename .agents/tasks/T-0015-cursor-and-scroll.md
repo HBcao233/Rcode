@@ -60,7 +60,7 @@ T-0014 完成后，`EditorView` 能只绘制可见行，并且有行布局缓存
   - 被截断的长行（`truncated = true`）点击到已量取范围之外时，按 Q-T15-4 处理，不能把“量取前缀的末尾”当成行尾。
   - 点击时若有组合文本（composing），先结束组合（`finishComposingText()`，保留已显示文本），再移动光标。
   - 移动后调用 `InputMethodManager.updateSelection(this, utf16, utf16, -1, -1)` 通知输入法新的选区（UTF-16 偏移），避免输入法上下文与文档不一致。
-  - 保留现有行为：按下即请求焦点并 `showSoftInput`（见 Q-T15-3）。
+  - 保留焦点行为，但焦点与 `showSoftInput` 只在**单击**时触发（`onSingleTapUp`）：拖动与 fling 不以 ACTION_DOWN 弹键盘，否则“滚动时弹出软键盘”会很卡体验（Q-T15-3 的追加修复，见下）。
 - **可测试性**
   - 坐标 ↔ 文档位置换算、滚动边界、`scrollX`/`scrollY` 的夹取逻辑抽成不依赖 `android.graphics.Canvas` 的纯 Kotlin 逻辑（例如 `EditorHitTester`、`ScrollBounds`），宽度测量通过注入的接口/已算好的 `xOffsets` 提供，保证能在 JVM 单元测试覆盖。
   - `LaidOutLine` 增加“x 坐标 → 文本中 UTF-16 索引”的反向查询（含 tab 展开与中点判定），与现有 `xForTextIndex` 成对测试。
@@ -90,8 +90,9 @@ T-0014 完成后，`EditorView` 能只绘制可见行，并且有行布局缓存
   - 选项 B：新增 Rust FFI 查询“文档最长行宽度”（需要 `uniffi-bridge` skill、Rust 测试与依赖/接口审批），能一次拿到准确值，但会让横向范围随整篇文档变化，且与本任务的“只做触摸交互”定位不符。
   - 确认选项 A，横向范围只覆盖已加载过的行；滚到更宽的行时范围会自动扩大而不收缩。
 - [x] **Q-T15-3 点击时是否弹出软键盘**：
-  - 沿用 M1.0 行为，每次点击都 `showSoftInput`（与常见编辑器一致）；即使用户刚刚手动收起键盘，点击定位也会重新弹出。
-  - 需要修复行为：MoreMenuButton 点击后，软键盘还没收起，DropdownMenu就已打开，导致长度不足以显示完所有按钮
+  - 单击时 `showSoftInput`（与常见编辑器一致）；即使用户刚刚手动收起键盘，点击定位也会重新弹出。
+  - 实现时改为只在 `onSingleTapUp` 请求焦点并弹键盘：拖动必定先有 ACTION_DOWN，若在那里弹键盘会导致“滚动时弹出软键盘”（人类报告的体验 bug）。
+  - 需要修复行为：MoreMenuButton 点击后，软键盘还没收起，DropdownMenu就已打开，导致长度不足以显示完所有按钮（已在本任务一并修复）。
 - [x] **Q-T15-4 点击落在被截断长行的已量取范围之外**：
   - 选项 A（**推荐**）：命中时只对**该行**按“点击 x + 一个行高”重新测量一次（一次性开销，不在 `onDraw` 或滚动路径中），再据完整几何换算；不写回缓存，避免污染窗口分档。
   - 选项 B：把点击位置夹到已量取范围的最后一个边界，用户需要先横向滚到该位置再点击；实现简单但点击结果与视觉位置不符，容易被认为是 bug。
@@ -154,9 +155,10 @@ T-0014 完成后，`EditorView` 能只绘制可见行，并且有行布局缓存
   - `EditorView`：像素级 `scrollX` / `scrollY`，`firstLine` 派生；`canvas.translate` 绘制；`GestureDetector` + `OverScroller` 实现拖动、fling、按下打断、单击；单击 → 结束组合 → `moveCursor` → `InputMethodManager.updateSelection`；编辑/方向键/尺寸变化后最小幅度滚到光标可见；滚动仅在离开已加载三屏时调用 `viewport`。
   - 长行横向滚动：512 px 分档窗口、100k 上限、分档变化失效缓存；`maxLineWidth` 单调累积；点击超出已测前缀时只对该行做一次性加宽布局。
   - `MainScreen`：打开 More 菜单前 `clearFocus()` + 收起 IME（Q-T15-3 的追加修复）。
+  - 修复“滚动时弹出软键盘”：焦点与 `showSoftInput` 从 ACTION_DOWN 移到 `onSingleTapUp`，拖动不再抢焦点/弹键盘。
   - 文档：`architecture.md` §3.2、`EditorLineLayoutCache` 注释、`CHANGELOG.md`。
 - 未完成（需人类补测）：
-  - 仪器测试 `EditorTouchInstrumentedTest` 与真机用例 S1–S4、C1–C7、回归项。当前环境 `adb devices` 为空（已确认）。仪器测试已覆盖点击定位、滚动后点击、留白区、拖动不移动光标、边界夹取、横向滚动与光标水平跟随、“窗口内滚动不调用会话”。
+  - 仪器测试 `EditorTouchInstrumentedTest` 与真机用例 S1–S4、C1–C7、回归项。当前环境 `adb devices` 为空（已确认）。仪器测试已覆盖点击定位、滚动后点击、留白区、拖动不移动光标、边界夹取、横向滚动与光标水平跟随、“窗口内滚动不调用会话”，以及“拖动不抢焦点、单击抢焦点”。
   - 惯性滑动手感（fling 初始速度/衰减）只在代码层面设定，未在真机调参。
 - 测试结果：
   - `./gradlew :app:testDebugUnitTest --offline` → **通过**（109 tests，含新增 `EditorScrollGeometryTest`、`LaidOutLineHitTest`、`EditorHitTestTest`）。
