@@ -13,6 +13,7 @@ import com.hbcao.rcode.editor.EncodedDocument
 import com.hbcao.rcode.editor.OpenedDocumentState
 import com.hbcao.rcode.ui.theme.EditorColors
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -135,6 +136,28 @@ class EditorTouchInstrumentedTest {
                 // A tap near the right edge now lands well inside the line.
                 view.moveCaretForTest((VIEW_WIDTH - 10).toFloat(), view.lineHeightPx() * 0.5f)
                 assertTrue(session.cursor().byteOffset > 0)
+            }
+        } finally {
+            session.close()
+        }
+    }
+
+    @Test
+    fun caretIsScrolledIntoViewHorizontallyOnALongLine() {
+        val session = UniffiEditorSession()
+        try {
+            instrumentation.runOnMainSync {
+                val view = openSessionView(session, "x".repeat(3_000).encodeToByteArray())
+                session.moveCursor(2_500)
+                view.refreshViewport()
+
+                assertTrue("expected a horizontal scroll to the caret", view.scrollXPixels > 0f)
+                val caretX = view.caretScreenXPixels()
+                assertNotNull("the caret line must be loaded", caretX)
+                assertTrue(
+                    "caret must be inside the view but was $caretX",
+                    caretX!! >= 0f && caretX <= VIEW_WIDTH.toFloat(),
+                )
             }
         } finally {
             session.close()

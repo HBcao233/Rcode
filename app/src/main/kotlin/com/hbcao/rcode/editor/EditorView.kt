@@ -750,6 +750,9 @@ class EditorView(
     /** Test hook (T-0015): baseline-to-baseline distance in px. */
     internal fun lineHeightPx(): Float = lineHeight
 
+    /** Test hook (T-0015): caret x in view coordinates, or `null` when not loaded. */
+    internal fun caretScreenXPixels(): Float? = caretRect?.let { it.left + caretInset - scrollX }
+
     /**
      * Resets rendering and the IME after the session replaced its document (T-0012).
      *
@@ -804,8 +807,9 @@ class EditorView(
         get() = EditorScrollGeometry.firstLineFor(scrollY, lineHeight, lineCount)
 
     private fun caretRect(viewport: EditorViewportSnapshot): RectF? {
-        val line = layoutAt(viewport.cursor.line) ?: return null
-        val textIndex = Utf8Offsets.byteToUtf16Index(line.text, viewport.cursor.columnBytes)
+        val cached = layoutAt(viewport.cursor.line) ?: return null
+        val textIndex = Utf8Offsets.byteToUtf16Index(cached.text, viewport.cursor.columnBytes)
+        val line = layoutForCaret(cached)
         val x = paddingLeft + line.xForTextIndex(textIndex)
         val top = lineTop(line.index)
         return RectF(
@@ -814,6 +818,24 @@ class EditorView(
             x - caretInset + caretWidth,
             top + lineHeight,
         )
+    }
+
+    /**
+     * Length of the caret line far enough to place the caret (S4).
+     *
+     * A line truncated by the horizontal layout window reports its width at the window
+     * edge, which would pin the caret there and stop the viewport from scrolling to the
+     * real column. The caret line is therefore measured once up to the layout cap; only
+     * this one line pays the cost, only while it is truncated, and the result is not
+     * cached. The extra width also raises `maxLineWidth` so the horizontal scroll range
+     * can reach the caret.
+     */
+    private fun layoutForCaret(cached: LaidOutLine): LaidOutLine {
+        if (!cached.truncated) return cached
+        val slice = laidOutSlices.getOrNull(cached.index - layoutFirstLine) ?: return cached
+        val measured = layoutBuilder.layout(slice, MAX_LINE_LAYOUT_WINDOW_PX)
+        if (measured.width > maxLineWidth) maxLineWidth = measured.width
+        return measured
     }
 
     /** Cached layout of [lineIndex], or `null` when it is outside the prefetch window. */

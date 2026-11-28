@@ -156,7 +156,7 @@ T-0014 完成后，`EditorView` 能只绘制可见行，并且有行布局缓存
   - `MainScreen`：打开 More 菜单前 `clearFocus()` + 收起 IME（Q-T15-3 的追加修复）。
   - 文档：`architecture.md` §3.2、`EditorLineLayoutCache` 注释、`CHANGELOG.md`。
 - 未完成（需人类补测）：
-  - 仪器测试 `EditorTouchInstrumentedTest` 与真机用例 S1–S4、C1–C7、回归项。当前环境 `adb devices` 为空（已确认）。
+  - 仪器测试 `EditorTouchInstrumentedTest` 与真机用例 S1–S4、C1–C7、回归项。当前环境 `adb devices` 为空（已确认）。仪器测试已覆盖点击定位、滚动后点击、留白区、拖动不移动光标、边界夹取、横向滚动与光标水平跟随、“窗口内滚动不调用会话”。
   - 惯性滑动手感（fling 初始速度/衰减）只在代码层面设定，未在真机调参。
 - 测试结果：
   - `./gradlew :app:testDebugUnitTest --offline` → **通过**（109 tests，含新增 `EditorScrollGeometryTest`、`LaidOutLineHitTest`、`EditorHitTestTest`）。
