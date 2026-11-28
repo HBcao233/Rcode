@@ -469,11 +469,11 @@ class EditorView(
 
     /** Clamps both offsets after the document, the view size or the font changed. */
     private fun clampScrollOffsets() {
-        val clampedX = scrollX.coerceIn(0f, maxScrollX())
-        val clampedY = scrollY.coerceIn(0f, maxScrollY())
-        if (clampedX == scrollX && clampedY == scrollY) return
-        scrollX = clampedX
-        scrollY = clampedY
+        scrollX = scrollX.coerceIn(0f, maxScrollX())
+        scrollY = scrollY.coerceIn(0f, maxScrollY())
+        // Always re-check the window: revealing the caret can jump `scrollX` across a
+        // layout-window bucket without changing the clamped value, and the stale
+        // (truncated) layouts would leave the right part of the line unpainted.
         relayoutIfWindowChanged()
     }
 

@@ -272,3 +272,7 @@ All notable changes are documented here. Format follows Keep a Changelog.
 - Fixed: a drag no longer focuses the editor or opens the soft keyboard. Focus and
   `showSoftInput` now wait for the tap callback, so starting a scroll with the keyboard
   hidden no longer pops it up; a tap still focuses the editor and shows the keyboard.
+- Fixed: moving the caret to the end of a long previous line (Left from a line start)
+  jumped the horizontal offset without re-laying out the loaded lines, so only the
+  truncated prefix of that line was painted. Clamping now always re-checks the layout
+  window, and the line is re-measured for the new window.

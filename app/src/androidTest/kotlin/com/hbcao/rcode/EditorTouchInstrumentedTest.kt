@@ -171,6 +171,37 @@ class EditorTouchInstrumentedTest {
     }
 
     @Test
+    fun movingToTheEndOfALongLineKeepsTheLinePainted() {
+        val session = UniffiEditorSession()
+        try {
+            instrumentation.runOnMainSync {
+                val long = "x".repeat(1_000)
+                val view = openSessionView(session, (long + "\ny").encodeToByteArray())
+
+                // Caret at the start of line 1: no horizontal scroll yet.
+                session.moveCursor(long.length + 1)
+                view.refreshViewport()
+                assertEquals(0f, view.scrollXPixels, 0f)
+
+                // Left at a line start jumps to the end of the long previous line.
+                session.moveCursorHorizontal(-1)
+                view.refreshViewport()
+                assertEquals(long.length, session.cursor().byteOffset)
+                assertTrue("expected a horizontal scroll", view.scrollXPixels > 0f)
+
+                // Regression: the new window must be laid out, otherwise only the
+                // truncated prefix of the line is painted (the reported missing text).
+                assertEquals(long, view.visibleTextAt(0))
+                val caretX = view.caretScreenXPixels()
+                assertNotNull("the caret line must be loaded", caretX)
+                assertTrue(caretX!! in 0f..VIEW_WIDTH.toFloat())
+            }
+        } finally {
+            session.close()
+        }
+    }
+
+    @Test
     fun scrollingInsideTheLoadedWindowDoesNotCallTheSession() {
         val session = CountingSession(UniffiEditorSession())
         try {
