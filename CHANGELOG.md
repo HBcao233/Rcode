@@ -281,3 +281,7 @@ All notable changes are documented here. Format follows Keep a Changelog.
 - Added: draggable vertical and horizontal scrollbars. The 4 dp bar is drawn at the
   content edge whenever that axis overflows, the touch target is 24 dp, touching the
   track centers the thumb there, and dragging the bar never moves the caret.
+- Fixed: a drag that started right after a tap could not scroll. `SimpleOnGestureListener`
+  also implements `OnDoubleTapListener`, so the quick second touch was consumed as a
+  double tap and ACTION_MOVE went to `onDoubleTapEvent` instead of `onScroll`. The
+  double-tap listener is now cleared (T-0016 can install its own for word selection).

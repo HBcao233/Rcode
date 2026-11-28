@@ -221,6 +221,39 @@ class EditorTouchInstrumentedTest {
     }
 
     @Test
+    fun scrollingWorksImmediatelyAfterATap() {
+        val session = UniffiEditorSession()
+        val scenario = ActivityScenario.launch(ComponentActivity::class.java)
+        try {
+            scenario.onActivity { activity ->
+                session.open(document(200))
+                val view = EditorView(activity, session, colors())
+                activity.setContentView(view)
+                view.layout(0, 0, VIEW_WIDTH, VIEW_HEIGHT)
+                view.refreshViewport()
+
+                // A tap places the caret; the next touch comes before the platform's
+                // double-tap window has expired.
+                dispatch(view, MotionEvent.ACTION_DOWN, 100f, 400f)
+                dispatch(view, MotionEvent.ACTION_UP, 100f, 400f)
+                val caretAfterTap = session.cursor().byteOffset
+
+                // A drag that starts right away must scroll, not be swallowed as a
+                // double tap.
+                dispatch(view, MotionEvent.ACTION_DOWN, 100f, 400f)
+                dispatch(view, MotionEvent.ACTION_MOVE, 100f, 100f)
+                dispatch(view, MotionEvent.ACTION_UP, 100f, 100f)
+
+                assertTrue("a drag right after a tap must scroll", view.scrollYPixels > 0f)
+                assertEquals(caretAfterTap, session.cursor().byteOffset)
+            }
+        } finally {
+            scenario.close()
+            session.close()
+        }
+    }
+
+    @Test
     fun draggingTheScrollBarScrollsWithoutMovingTheCaret() {
         val session = UniffiEditorSession()
         val scenario = ActivityScenario.launch(ComponentActivity::class.java)

@@ -190,6 +190,12 @@ class EditorView(
         isFocusableInTouchMode = true
         isClickable = true
         setBackgroundColor(colors.background)
+        // Use the detector only for single taps, drags and flings. `SimpleOnGestureListener`
+        // also implements `OnDoubleTapListener`, so the constructor installs it; then a
+        // quick second touch after a tap is treated as a double tap, ACTION_MOVE goes to
+        // `onDoubleTapEvent` and scrolling is suppressed until the double-tap window
+        // expires (tap-then-drag did not scroll). T-0016 can install its own listener.
+        gestureDetector.setOnDoubleTapListener(null)
     }
 
     // region IME / input path
