@@ -127,11 +127,9 @@ T-0016 在 Rust 侧提供选区权威状态与 FFI（`selection` / `set_selectio
 - [x] **Q-T16-6 高亮颜色**：主题 `primary` 的 24%–32% 透明度。
 - [x] **Q-T16-7 菜单条目**：固定 Copy / Cut / Paste；无选区不显示菜单（只有 Paste 的菜单不做）。
 - [x] **Q-T16-8 菜单实现**：`PopupWindow` + `ComposeView`。
-- [ ] **Q-T31-1 超大选区复制上限与行为（非阻塞，按推荐实现）**：
+- [x] **Q-T31-1 超大选区复制上限与行为（非阻塞，按推荐实现）**：
   - `selectedText(maxBytes)` / `getSelectedText` 需要一个上限，避免把 10 MB 选区整段拉进 Java 堆与剪贴板。
-  - 选项 A（**推荐**）：上限 **8 MiB**（`MAX_SELECTED_TEXT_BYTES`）；超过上限时 Copy/Cut 不执行、给出提示（`editor_selection_too_large`），`getSelectedText` 返回 `null`；选区内文本仍可正常编辑。
-  - 选项 B：不设上限，允许复制整篇文档（剪贴板内存峰值与文档同量级，最多 64 MiB）。
-  - 推荐 A；文案与上限在实现时集中在一处。
+  - 上限 **1 MiB**（`MAX_SELECTED_TEXT_BYTES`）；超过上限时 Copy/Cut 只复制前 1 MiB、并给出提示（`editor_selection_too_large`），`getSelectedText` 返回 `null`；选区内文本仍可正常编辑。
 
 ## 测试方案
 

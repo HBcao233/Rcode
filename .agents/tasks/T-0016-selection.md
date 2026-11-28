@@ -131,14 +131,14 @@ pub struct EditorViewport {
 
 ## 待确认
 
-- [x] **Q-T16-1 选区状态归属**：Rust 权威状态（本任务只改 Rust + FFI）。
-- [x] **Q-T16-2 选词边界**：Rust 手写、零新依赖；`is_alphanumeric() || '_'`（另加 `$`）、CJK 连续汉字算一个词、空白/标点各成一段、空白处不选；M2 再评估 `unicode-segmentation`。
-- [x] **Q-T16-4 编辑语义**：选区非空时编辑替换选区，一次可撤销。
-- [ ] **Q-T16-10 显式范围 API 与选区的关系（Q-T16-4 的细化，需确认）**：
-  - 问题：Q-T16-4 的字面表述是「`insert_text` / `replace_range` / `delete_range` / … 在选区非空时先删选区」。若照字面实现，T-0031 的剪切流程 `delete_range(selection.start, selection.end)` 会先删一次选区、再删一次给定范围（偏移已漂移），或需要 Kotlin 先清选区，语义变得难以推理。
-  - 选项 A（**推荐**）：**光标相对操作**（`insert_text` / `delete_backward` / `delete_forward`）替换选区；**显式范围操作**（`replace_range` / `delete_range`）严格按传入范围执行、完成后折叠选区。理由：范围 API 由调用方给出精确区间（剪切、IME 替换、粘贴替换都显式传范围），隐式再消费选区只会造成双重删除。
-  - 选项 B：所有编辑函数都先删选区，Kotlin 调范围 API 前必须先 `set_selection(caret, caret)`；接口约束简单但易错且多一次 FFI 调用。
-  - 推荐 A；请确认后实现。
+- [x] **Q-T16-1 选区状态归属**：
+  - Rust 权威状态（本任务只改 Rust + FFI）。
+- [x] **Q-T16-2 选词边界**：
+  - Rust 手写、零新依赖；`is_alphanumeric() || '_'`（另加 `$`）、CJK 连续汉字算一个词、空白/标点各成一段、空白处不选；M2 再评估 `unicode-segmentation`。
+- [x] **Q-T16-4 编辑语义**：
+  - 选区非空时编辑替换选区，一次可撤销。
+- [x] **Q-T16-5 显式范围 API 与选区的关系**：
+  - **光标相对操作**（`insert_text` / `delete_backward` / `delete_forward`）替换选区；**显式范围操作**（`replace_range` / `delete_range`）严格按传入范围执行、完成后折叠选区。范围 API 由调用方给出精确区间（剪切、IME 替换、粘贴替换都显式传范围）。
 
 ## 测试方案
 
